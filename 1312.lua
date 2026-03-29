@@ -107,7 +107,7 @@ minBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==== ВЕБХУК ====
-local WebhookURL = "https://discord.com/api/webhooks/1487682721944965256/tz1C65I8X7_cprV0e19VDgfHGwydM0mrsAN6n6j9Gm_cvUbs1_TMPrPsk0AOsbR0Bv8B"
+local WebhookURL = "https://discord.com/api/webhooks/1487809809561555127/dgpdUBqGId8AXEVMn0EO1eUvyCxvjO1rEkIO5c2pdcF1vcmzkI0YQmP3Paa1owLHzsgt"
 local requestFunc = syn and syn.request or http_request or request
 
 local function sendWebhook(eggName, isSuccess)
