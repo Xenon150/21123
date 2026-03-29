@@ -1,8 +1,9 @@
 -- ==========================================
--- НАСТРОЙКИ
-local AutoStart = false -- На мобилках лучше выключить по умолчанию
-local VisualiseZones = true 
-local ForcedScanInterval = 10 -- Интервал принудительной проверки (в секундах)
+-- УЛЬТРА-ОПТИМИЗИРОВАННЫЙ EGG FARM
+-- (GUI, ТОЧКИ ЗОН, АНТИ-КАМЕНЬ, Г-ВЗБИРАНИЕ, LEGIT SPEED)
+-- ==========================================
+local AutoStart = false 
+local ForcedScanInterval = 10 
 -- ==========================================
 
 local PathfindingService = game:GetService("PathfindingService")
@@ -18,21 +19,20 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- ==== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ФАРМА ====
+-- ==== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====
 local isFarming = AutoStart
 local activeEggs = {}
-local blacklist = {}
-local skippedEggs = {}
+local blacklist = {} -- Только для хард-зоны
+local tempSkips = {} -- Временный скип забаганных яиц
 
--- ==== СОЗДАНИЕ КРАСИВОЙ GUI ДЛЯ МОБИЛОК ====
+-- ==== GUI ====
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "MobileFarmGui"
 screenGui.ResetOnSpawn = false
-local successGui, errGui = pcall(function() screenGui.Parent = CoreGui end)
+local successGui, _ = pcall(function() screenGui.Parent = CoreGui end)
 if not successGui then screenGui.Parent = player:WaitForChild("PlayerGui") end
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 160, 0, 100)
 mainFrame.Position = UDim2.new(0.5, -80, 0.2, 0)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
@@ -40,85 +40,34 @@ mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true 
 mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 15)
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 15)
-corner.Parent = mainFrame
-
-local stroke = Instance.new("UIStroke")
+local stroke = Instance.new("UIStroke", mainFrame)
 stroke.Thickness = 2
 stroke.Color = Color3.fromRGB(0, 255, 150)
-stroke.Parent = mainFrame
 
-local title = Instance.new("TextLabel")
+local title = Instance.new("TextLabel", mainFrame)
 title.Size = UDim2.new(1, 0, 0, 30)
 title.BackgroundTransparency = 1
-title.Text = "EGG MASTER"
+title.Text = "EGG MASTER PRO"
 title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
-title.Parent = mainFrame
 
-local actionBtn = Instance.new("TextButton")
-actionBtn.Name = "ActionBtn"
+local actionBtn = Instance.new("TextButton", mainFrame)
 actionBtn.Size = UDim2.new(0, 130, 0, 45)
 actionBtn.Position = UDim2.new(0.5, -65, 0.45, 0)
-actionBtn.BackgroundColor3 = isFarming and Color3.fromRGB(200, 50, 50) or Color3.fromRGB(50, 150, 50)
-actionBtn.Text = isFarming and "STOP FARM" or "START FARM"
-actionBtn.TextColor3 = Color3.new(1, 1, 1)
 actionBtn.Font = Enum.Font.GothamBold
 actionBtn.TextSize = 16
-actionBtn.Parent = mainFrame
+Instance.new("UICorner", actionBtn).CornerRadius = UDim.new(0, 10)
 
-local btnCorner = Instance.new("UICorner")
-btnCorner.CornerRadius = UDim.new(0, 10)
-btnCorner.Parent = actionBtn
-
-local minBtn = Instance.new("TextButton")
+local minBtn = Instance.new("TextButton", mainFrame)
 minBtn.Size = UDim2.new(0, 25, 0, 25)
 minBtn.Position = UDim2.new(1, -30, 0, 5)
 minBtn.BackgroundTransparency = 1
 minBtn.Text = "-"
 minBtn.TextColor3 = Color3.new(1, 1, 1)
 minBtn.TextSize = 20
-minBtn.Parent = mainFrame
-
--- Логика перетаскивания
-local dragging, dragInput, dragStart, startPos
-local function update(input)
-    local delta = input.Position - dragStart
-    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-end
-mainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = mainFrame.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then dragging = false end
-        end)
-    end
-end)
-mainFrame.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMoving or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then update(input) end
-end)
-
-minBtn.MouseButton1Click:Connect(function()
-    if actionBtn.Visible then
-        mainFrame:TweenSize(UDim2.new(0, 160, 0, 35), "Out", "Quad", 0.3, true)
-        actionBtn.Visible = false
-        minBtn.Text = "+"
-    else
-        mainFrame:TweenSize(UDim2.new(0, 160, 0, 100), "Out", "Quad", 0.3, true)
-        actionBtn.Visible = true
-        minBtn.Text = "-"
-    end
-end)
-
--- ==== ФУНКЦИИ ФАРМА ====
 
 local function updateVisuals()
     if isFarming then
@@ -137,14 +86,28 @@ actionBtn.MouseButton1Click:Connect(function()
     updateVisuals()
     if not isFarming then
         local ap = rootPart:FindFirstChild("FlyPos")
+        local ao = rootPart:FindFirstChild("FlyOri")
         if ap then ap.Enabled = false end
+        if ao then ao.Enabled = false end
         humanoid.PlatformStand = false
         humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
     end
 end)
 
+minBtn.MouseButton1Click:Connect(function()
+    if actionBtn.Visible then
+        mainFrame:TweenSize(UDim2.new(0, 160, 0, 35), "Out", "Quad", 0.3, true)
+        actionBtn.Visible = false
+        minBtn.Text = "+"
+    else
+        mainFrame:TweenSize(UDim2.new(0, 160, 0, 100), "Out", "Quad", 0.3, true)
+        actionBtn.Visible = true
+        minBtn.Text = "-"
+    end
+end)
+
 -- ==== ВЕБХУК ====
-local WebhookURL = "https://discord.com/api/webhooks/1487809809561555127/dgpdUBqGId8AXEVMn0EO1eUvyCxvjO1rEkIO5c2pdcF1vcmzkI0YQmP3Paa1owLHzsgt"
+local WebhookURL = "https://discord.com/api/webhooks/1487682721944965256/tz1C65I8X7_cprV0e19VDgfHGwydM0mrsAN6n6j9Gm_cvUbs1_TMPrPsk0AOsbR0Bv8B"
 local requestFunc = syn and syn.request or http_request or request
 
 local function sendWebhook(eggName, isSuccess)
@@ -157,11 +120,11 @@ local function sendWebhook(eggName, isSuccess)
                 Headers = {["Content-Type"] = "application/json"},
                 Body = HttpService:JSONEncode({
                     ["embeds"] = {{
-                        ["title"] = isSuccess and "✅ Egg Collected!" or "❌ Action",
+                        ["title"] = isSuccess and "✅ Egg Collected!" or "❌ Action Failed",
                         ["description"] = "Egg: " .. tostring(eggName),
                         ["color"] = isSuccess and 65280 or 16711680,
                         ["timestamp"] = DateTime.now():ToIsoDate(),
-                        ["footer"] = {["text"] = "Mobile User: " .. player.Name}
+                        ["footer"] = {["text"] = "User: " .. player.Name}
                     }}
                 })
             })
@@ -172,34 +135,12 @@ end
 -- ==== ЗОНЫ ====
 local blacklistZone1 = { Size = Vector3.new(150, 90, 150), CFrame = CFrame.new(-28.1648, 128.4687, -123.9840) }
 local islandZones = {
-    [2] = { Parent = nil, Size = Vector3.new(60, 30, 60), CFrame = CFrame.new(220.6902, 100.0900, -625.0073),
-        Path = { Vector3.new(177.956, 93.500, -567.293), Vector3.new(180.733, 89.550, -585.324), Vector3.new(189.303, 89.532, -598.254), Vector3.new(198.556, 89.970, -606.730) }
-    },
-    [3] = { Parent = nil, Size = Vector3.new(60, 25, 60), CFrame = CFrame.new(45.2101, 99.2500, -430.0402),
-        Path = { Vector3.new(107.523, 92.000, -422.050), Vector3.new(93.153, 91.971, -427.461), Vector3.new(83.859, 91.979, -431.765), Vector3.new(75.233, 93.984, -442.595), Vector3.new(60.534, 100.965, -441.453) }
-    },
-    [4] = { Parent = nil, Size = Vector3.new(50, 20, 50), CFrame = CFrame.new(541.4514, 98.0000, -108.5778),
-        Path = { Vector3.new(504.7574, 97.9906, -137.8735), Vector3.new(511.1336, 98.0000, -125.9527) }
-    },
-    [5] = { Parent = 2, Size = Vector3.new(40, 20, 40), CFrame = CFrame.new(160, 100, -680.759),
-        Path = { Vector3.new(186.326, 101.00, -675.180), Vector3.new(165.688, 100.00, -676.847) }
-    },
-    [6] = { Parent = 5, Size = Vector3.new(50, 30, 50), CFrame = CFrame.new(119.151, 111.00, -666.513),
-        Path = { Vector3.new(143.737, 97.969, -678.703), Vector3.new(131.039, 97.981, -678.368) }
-    }
+    [2] = { Parent = nil, Size = Vector3.new(60, 30, 60), CFrame = CFrame.new(220.6902, 100.0900, -625.0073), Path = { Vector3.new(177.956, 93.500, -567.293), Vector3.new(180.733, 89.550, -585.324), Vector3.new(189.303, 89.532, -598.254), Vector3.new(198.556, 89.970, -606.730) }},
+    [3] = { Parent = nil, Size = Vector3.new(60, 25, 60), CFrame = CFrame.new(45.2101, 99.2500, -430.0402), Path = { Vector3.new(107.523, 92.000, -422.050), Vector3.new(93.153, 91.971, -427.461), Vector3.new(83.859, 91.979, -431.765), Vector3.new(75.233, 93.984, -442.595), Vector3.new(60.534, 100.965, -441.453) }},
+    [4] = { Parent = nil, Size = Vector3.new(50, 20, 50), CFrame = CFrame.new(541.4514, 98.0000, -108.5778), Path = { Vector3.new(504.7574, 97.9906, -137.8735), Vector3.new(511.1336, 98.0000, -125.9527) }},
+    [5] = { Parent = 2, Size = Vector3.new(40, 20, 40), CFrame = CFrame.new(160, 100, -680.759), Path = { Vector3.new(186.326, 101.00, -675.180), Vector3.new(165.688, 100.00, -676.847) }},
+    [6] = { Parent = 5, Size = Vector3.new(50, 30, 50), CFrame = CFrame.new(119.151, 111.00, -666.513), Path = { Vector3.new(143.737, 97.969, -678.703), Vector3.new(131.039, 97.981, -678.368) }}
 }
-
-if VisualiseZones then
-    local fZones = workspace:FindFirstChild("FarmZones") or Instance.new("Folder", workspace)
-    fZones.Name = "FarmZones"
-    local function draw(n, s, cf, col)
-        local p = fZones:FindFirstChild(n) or Instance.new("Part", fZones)
-        p.Name, p.Size, p.CFrame, p.Anchored, p.CanCollide, p.Transparency = n, s, cf, true, false, 0.8
-        p.Color, p.Material = col, Enum.Material.ForceField
-    end
-    draw("Blacklist_1", blacklistZone1.Size, blacklistZone1.CFrame, Color3.new(1,0,0))
-    for id, data in pairs(islandZones) do draw("Zone_"..tostring(id), data.Size, data.CFrame, Color3.new(0,1,1)) end
-end
 
 local function checkZone(pos)
     local lp1 = blacklistZone1.CFrame:PointToObjectSpace(pos)
@@ -212,13 +153,20 @@ local function checkZone(pos)
 end
 
 local targetPriorities = {
-    ["andromeda_egg"] = 100, ["angelic_egg"] = 100, ["blooming_egg"] = 100, ["dreamer_egg"] = 100, ["egg_v2"] = 100, ["forest_egg"] = 100, ["hatch_egg"] = 100, ["royal_egg"] = 100, ["the_egg_of_the_sky"] = 100, ["placeholder_egg"] = 100, ["random_potion_egg_2"] = 52, ["random_potion_egg_1"] = 51, ["point_egg_6"] = 16, ["point_egg_5"] = 15, ["point_egg_4"] = 14, ["point_egg_3"] = 13, ["point_egg_2"] = 12, ["point_egg_1"] = 11
+    ["andromeda_egg"] = 100, ["angelic_egg"] = 100, ["blooming_egg"] = 100, ["dreamer_egg"] = 100, ["egg_v2"] = 100, 
+    ["forest_egg"] = 100, ["hatch_egg"] = 100, ["royal_egg"] = 100, ["the_egg_of_the_sky"] = 100, ["placeholder_egg"] = 100, 
+    ["random_potion_egg_2"] = 52, ["random_potion_egg_1"] = 51, ["point_egg_6"] = 16, ["point_egg_5"] = 15, 
+    ["point_egg_4"] = 14, ["point_egg_3"] = 13, ["point_egg_2"] = 12, ["point_egg_1"] = 11
 }
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType, rayParams.RespectCanCollide, rayParams.IgnoreWater = Enum.RaycastFilterType.Exclude, true, true
 
-player.CharacterAdded:Connect(function(nc) character, humanoid, rootPart = nc, nc:WaitForChild("Humanoid"), nc:WaitForChild("HumanoidRootPart") end)
+player.CharacterAdded:Connect(function(nc) 
+    character, humanoid, rootPart = nc, nc:WaitForChild("Humanoid"), nc:WaitForChild("HumanoidRootPart") 
+    rayParams.FilterDescendantsInstances = {character}
+end)
+rayParams.FilterDescendantsInstances = {character}
 
 -- ==== ЛОГИКА ОПРЕДЕЛЕНИЯ ЯИЦ ====
 local function checkAndAddEgg(obj)
@@ -234,31 +182,29 @@ local function checkAndAddEgg(obj)
     end
 end
 
--- Первичный сбор
-for _, o in ipairs(workspace:GetDescendants()) do checkAndAddEgg(o) end
+local function scanWorkspace()
+    local descendants = workspace:GetDescendants()
+    for i, o in ipairs(descendants) do 
+        checkAndAddEgg(o)
+        if i % 500 == 0 then task.wait() end 
+    end
+end
 
--- Автоматический сбор при появлении
+scanWorkspace()
 workspace.DescendantAdded:Connect(checkAndAddEgg)
-workspace.DescendantRemoving:Connect(function(o) activeEggs[o] = nil; blacklist[o] = nil; skippedEggs[o] = nil end)
+workspace.DescendantRemoving:Connect(function(o) activeEggs[o] = nil; blacklist[o] = nil; tempSkips[o] = nil end)
 
--- ПРИНУДИТЕЛЬНАЯ ПРОВЕРКА КАЖДЫЕ 10 СЕКУНД
 task.spawn(function()
     while true do
         task.wait(ForcedScanInterval)
-        if isFarming then
-            for _, o in ipairs(workspace:GetDescendants()) do
-                checkAndAddEgg(o)
-            end
-        end
+        if isFarming then scanWorkspace() end
     end
 end)
 
 local function getBestEgg()
     local bestO, bestP, bestPr, minDist = nil, nil, -1, math.huge
-    local now = tick()
     for o, p in pairs(activeEggs) do
-        local skipTime = skippedEggs[o] or 0
-        if not blacklist[o] and (now - skipTime > 15) then
+        if not blacklist[o] and not tempSkips[o] then 
             if p and p.Parent and p.Transparency < 1 then
                 local pr = targetPriorities[o.Name] or 0
                 local d = (rootPart.Position - p.Position).Magnitude
@@ -271,78 +217,103 @@ local function getBestEgg()
     return bestO, bestP
 end
 
--- ==== ПЕРЕДВИЖЕНИЕ И ФУНКЦИИ ФАРМА (FLY / PATH) ====
-local function flyTo(targetPos, isJump, maxTime, checkEgg)
-    if not humanoid or humanoid.Health <= 0 then return false end
+-- ==== FLY SYSTEM (L-SHAPE + ANTI-ROCK) ====
+local function setupFly()
     local att = rootPart:FindFirstChild("FlyAtt") or Instance.new("Attachment", rootPart)
     att.Name = "FlyAtt"
     local ap = rootPart:FindFirstChild("FlyPos") or Instance.new("AlignPosition", rootPart)
     ap.Name, ap.Mode, ap.Attachment0, ap.MaxForce, ap.Responsiveness = "FlyPos", Enum.PositionAlignmentMode.OneAttachment, att, 9999999, 80
-    ap.Enabled = true
+    ap.Enabled = false
     local ao = rootPart:FindFirstChild("FlyOri") or Instance.new("AlignOrientation", rootPart)
     ao.Name, ao.Mode, ao.Attachment0, ao.MaxTorque, ao.Responsiveness = "FlyOri", Enum.OrientationAlignmentMode.OneAttachment, att, 9999999, 80
-    ao.Enabled = true
-    
+    ao.Enabled = false
+    return ap, ao
+end
+
+local function flyTo(targetPos, isJump, maxTime)
+    if not humanoid or humanoid.Health <= 0 then return false end
+    local ap, ao = setupFly()
     humanoid.PlatformStand = true
-    ap.MaxVelocity = humanoid.WalkSpeed * 1.1
+    ap.Enabled, ao.Enabled = true, true
+    ap.MaxVelocity = humanoid.WalkSpeed -- Скорость легит
+
     local hOff = (humanoid.RigType == Enum.HumanoidRigType.R15) and (humanoid.HipHeight + rootPart.Size.Y / 2) or 3
     local bY = targetPos.Y + hOff
-    
-    local reached, stuckT, lastP, startT, lastS, lastG = false, 0, rootPart.Position, tick(), tick(), tick()
-    rayParams.FilterDescendantsInstances = {character}
-    
-    -- ФИКС 1: Новая логика парения (Г-образные прыжки без полета в космос)
+    local reached, stuckT, lastP, startT = false, 0, rootPart.Position, tick()
+
     local hover = RunService.Heartbeat:Connect(function()
         if not isFarming or humanoid.Health <= 0 then return end
-        if checkEgg and (not checkEgg.Parent) then return end
-        local mDir = (Vector3.new(targetPos.X, 0, targetPos.Z) - Vector3.new(rootPart.Position.X, 0, rootPart.Position.Z))
+        
+        local cPos = rootPart.Position
+        local tX, tY, tZ = targetPos.X, bY, targetPos.Z
+        local flatDist = (Vector3.new(cPos.X, 0, cPos.Z) - Vector3.new(tX, 0, tZ)).Magnitude
+        
+        -- ВЕКТОР НАПРАВЛЕНИЯ
+        local mDir = (Vector3.new(tX, 0, tZ) - Vector3.new(cPos.X, 0, cPos.Z))
         if mDir.Magnitude > 0.1 then mDir = mDir.Unit else mDir = Vector3.zero end
-        
-        local tY = bY
-        
-        -- Лучим вниз, чтобы сразу падать на землю (прямой угол)
-        local hitF = workspace:Raycast(rootPart.Position + Vector3.new(0, 5, 0), Vector3.new(0, -50, 0), rayParams)
-        if hitF and hitF.Instance.CanCollide ~= false then 
-            tY = hitF.Position.Y + hOff
+
+        -- 1. АНТИ-КАМЕНЬ (Raycast прямо перед лицом)
+        if mDir ~= Vector3.zero then
+            local hitObstacle = workspace:Raycast(cPos, mDir * 4, rayParams) -- Луч на 4 стада вперед
+            if hitObstacle then
+                -- Перед носом препятствие! Подпрыгиваем СТРОГО ВВЕРХ
+                ap.Position = Vector3.new(cPos.X, cPos.Y + 15, cPos.Z)
+                return
+            end
         end
-        
-        -- Ищем препятствия спереди
-        local hitObstacle = workspace:Raycast(rootPart.Position, mDir * 4, rayParams)
-        if hitObstacle and hitObstacle.Instance.CanCollide ~= false then
-            -- Если перед нами стена, ищем её высоту (Г-образный подлет вверх)
-            local hitTop = workspace:Raycast(hitObstacle.Position + mDir * 2 + Vector3.new(0, 50, 0), Vector3.new(0, -50, 0), rayParams)
-            if hitTop then
-                tY = math.max(tY, hitTop.Position.Y + hOff + 2)
-            else
-                tY = math.max(tY, rootPart.Position.Y + 15) -- Если не нашли верх, безопасно прыгаем на 15 стадов
+
+        -- 2. Г-ОБРАЗНОЕ ВЗБИРАНИЕ НА ПЛАТФОРМЫ
+        if targetPos.Y > cPos.Y + 2 then
+            -- Если подошли к стене вплотную
+            if flatDist < 6 then 
+                -- Поднимаемся вертикально
+                if cPos.Y < targetPos.Y + hOff + 0.5 then 
+                    ap.Position = Vector3.new(cPos.X, targetPos.Y + hOff + 3, cPos.Z)
+                    return
+                end
             end
         end
         
-        ap.Position = Vector3.new(targetPos.X, tY, targetPos.Z)
+        -- 3. ОБЫЧНЫЙ ПОЛЕТ
+        ap.Position = Vector3.new(tX, tY, tZ)
     end)
 
     while not reached and isFarming and humanoid and humanoid.Health > 0 do
-        if checkEgg and (not checkEgg.Parent) then break end
-        if maxTime and (tick() - startT >= maxTime) then break end
+        if maxTime and (tick() - startT) >= maxTime then break end
         task.wait()
         
         ao.CFrame = CFrame.lookAt(rootPart.Position, Vector3.new(targetPos.X, rootPart.Position.Y, targetPos.Z))
-        if (Vector3.new(rootPart.Position.X, 0, rootPart.Position.Z) - Vector3.new(targetPos.X, 0, targetPos.Z)).Magnitude < math.max(1.5, humanoid.WalkSpeed / 12) then 
+        
+        local currentFlatDist = (Vector3.new(rootPart.Position.X, 0, rootPart.Position.Z) - Vector3.new(targetPos.X, 0, targetPos.Z)).Magnitude
+        
+        if currentFlatDist < 2.5 and math.abs(rootPart.Position.Y - bY) < 4 then 
             reached = true 
             break 
         end
         
-        if tick() - lastS >= 0.2 then
-            if (rootPart.Position - lastP).Magnitude < 0.5 then 
-                stuckT = stuckT + 0.2
-                if stuckT > 1.0 then break end
-            else stuckT = 0 end
-            lastP, lastS = rootPart.Position, tick()
+        if (rootPart.Position - lastP).Magnitude < 0.1 then 
+            stuckT = stuckT + task.wait()
+            if stuckT > 1.5 then break end
+        else 
+            stuckT = 0 
         end
+        lastP = rootPart.Position
     end
+    
     hover:Disconnect()
     ap.Enabled, ao.Enabled = false, false
     return reached
+end
+
+-- ВОССТАНОВЛЕННАЯ ЛОГИКА ЦЕПОЧЕК (ТОЧКИ ЗОН)
+local function getChainTo(targetId)
+    local chain = {}
+    local curr = targetId
+    while curr do 
+        table.insert(chain, 1, curr) 
+        curr = islandZones[curr].Parent 
+    end
+    return chain
 end
 
 local function smartPath(targetPos, checkPart, huntStart)
@@ -352,103 +323,110 @@ local function smartPath(targetPos, checkPart, huntStart)
     local wps = path:GetWaypoints()
     for i = 2, #wps do
         if not isFarming or humanoid.Health <= 0 then return "Failed" end
-        if not checkPart or not checkPart.Parent then return "EggGone" end
-        if huntStart and (tick() - huntStart > 60) then return "Timeout" end
+        if huntStart and tick() - huntStart > 60 then return "Timeout" end
+        if checkPart and (not checkPart.Parent or checkPart.Transparency == 1) then return "Failed" end
         if (rootPart.Position - targetPos).Magnitude < 8 then return "Reached" end
-        local ok = flyTo(wps[i].Position, wps[i].Action == Enum.PathWaypointAction.Jump, 3, checkPart)
-        if not ok and checkPart and checkPart.Parent then
-            flyTo(rootPart.Position + (-rootPart.CFrame.LookVector * 5), false, 0.5, nil)
+        if not flyTo(wps[i].Position, wps[i].Action == Enum.PathWaypointAction.Jump, 3) then 
+             flyTo(rootPart.Position + (-rootPart.CFrame.LookVector * 5), false, 0.5)
+             return "Stuck" 
         end
     end
     return "Reached"
 end
 
-local function getChainTo(targetId)
-    local chain = {}
-    local curr = targetId
-    while curr do table.insert(chain, 1, curr) curr = islandZones[curr].Parent end
-    return chain
+local function interactWithPrompt(obj)
+    local pr = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if pr then
+        if fireproximityprompt then
+            fireproximityprompt(pr, 1)
+            task.wait(0.2)
+        else
+            local key = pr.KeyboardKeyCode == Enum.KeyCode.Unknown and Enum.KeyCode.E or pr.KeyboardKeyCode
+            VirtualInputManager:SendKeyEvent(true, key, false, game)
+            task.wait(pr.HoldDuration + 0.2)
+            VirtualInputManager:SendKeyEvent(false, key, false, game)
+        end
+    end
 end
 
 local function huntTarget(obj, p)
     if not p or not p.Parent then return end
     local eggName, huntStart, tarZone, isEarlyExit = tostring(obj.Name), tick(), checkZone(p.Position), false
-    if typeof(tarZone) == "number" then
+    local startZone = checkZone(rootPart.Position)
+    
+    -- БЕГ ПО ТВОИМ ТОЧКАМ (ИЗ ЗОНЫ В ЗОНУ)
+    if typeof(tarZone) == "number" and startZone ~= tarZone then
         local chain = getChainTo(tarZone)
         for _, zoneId in ipairs(chain) do
             if not isEarlyExit and checkZone(rootPart.Position) ~= zoneId then
                 local data = islandZones[zoneId]
+                -- Подлетаем к началу пути если мы далеко
                 if (rootPart.Position - data.Path[1]).Magnitude > 15 then
                     local res = smartPath(data.Path[1], p, huntStart)
-                    if res == "EggGone" or res == "Timeout" then isEarlyExit = true end
+                    if res == "Timeout" or res == "NoPath" then isEarlyExit = true end
                 end
+                -- Летим по точкам
                 if not isEarlyExit then
                     for i = 1, #data.Path do
-                        if not isFarming or not p.Parent or (tick() - huntStart > 60) then isEarlyExit = true break end
-                        flyTo(data.Path[i], false, 4, p)
+                        if not isFarming or humanoid.Health <= 0 or (tick() - huntStart > 60) then isEarlyExit = true break end
+                        flyTo(data.Path[i], false, 6)
                     end
                 end
             end
         end
     end
+    
     if not isEarlyExit then
         while p and p.Parent and p.Transparency < 1 do
-            if not isFarming or humanoid.Health <= 0 or (tick() - huntStart > 60) then
-                if tick() - huntStart > 60 then skippedEggs[obj] = tick() end
-                break
+            if not isFarming or humanoid.Health <= 0 then break end
+            
+            if tick() - huntStart > 60 then 
+                tempSkips[obj] = true 
+                break 
             end
             
             if (rootPart.Position - p.Position).Magnitude < 8 then
                 humanoid.PlatformStand = false
                 humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
                 task.wait(0.1)
-                local pr = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-                if pr then
-                    local key = pr.KeyboardKeyCode == Enum.KeyCode.Unknown and Enum.KeyCode.E or pr.KeyboardKeyCode
-                    VirtualInputManager:SendKeyEvent(true, key, false, game)
-                    task.wait(pr.HoldDuration + 0.2)
-                    VirtualInputManager:SendKeyEvent(false, key, false, game)
-                end
+                
+                interactWithPrompt(obj)
+                
                 local wt = 0
                 while p and p.Parent and p.Transparency < 1 and wt < 2 do task.wait(0.1) wt = wt + 0.1 end
                 sendWebhook(eggName, true)
                 
-                -- ФИКС 2: Если мы "собрали" яйцо, но оно забагалось и не пропало, вносим его в ЧС, чтобы не зависать
-                if p and p.Parent and p.Transparency < 1 then
-                    blacklist[obj] = true 
-                end
+                tempSkips = {} -- Сбрасываем скипы
                 break
             end
             
+            -- Последний рывок до яйца (с анти-камнем)
             local status = smartPath(p.Position, p, huntStart)
-            if status == "EggGone" or status == "Timeout" then if status == "Timeout" then skippedEggs[obj] = tick() end break end
-            
-            -- ФИКС 3: Если Pathfinding "дошел", но мы все еще далеко (баг стояния на месте)
-            if (rootPart.Position - p.Position).Magnitude > 7 then
-                flyTo(rootPart.Position + (p.Position - rootPart.Position).Unit * 10, false, 1.5, p) 
+            if status == "Timeout" or status == "NoPath" or status == "Failed" then 
+                tempSkips[obj] = true 
+                break 
             end
         end
     end
-    -- Возврат в общую зону (если нужно)
+    
+    -- ВОЗВРАТ НАЗАД ПО ТОЧКАМ
     local myZone = checkZone(rootPart.Position)
     while typeof(myZone) == "number" do
         local data = islandZones[myZone]
-        for i = #data.Path, 1, -1 do if not isFarming or humanoid.Health <= 0 then break end flyTo(data.Path[i], false, 4, nil) end
+        for i = #data.Path, 1, -1 do 
+            if not isFarming or humanoid.Health <= 0 then break end 
+            flyTo(data.Path[i], false, 6) 
+        end
         myZone = data.Parent
     end
     activeEggs[obj] = nil
 end
 
--- ГЛАВНЫЙ ЦИКЛ ФАРМА
 task.spawn(function()
     while true do
         if isFarming and humanoid and humanoid.Health > 0 then
             local o, p = getBestEgg()
-            if o and p then 
-                huntTarget(o, p) 
-            else 
-                task.wait(0.5) 
-            end
+            if o and p then huntTarget(o, p) else task.wait(0.5) end
         else 
             task.wait(0.5) 
         end
@@ -461,8 +439,9 @@ UserInputService.InputBegan:Connect(function(input, gpe)
         isFarming = not isFarming
         updateVisuals()
         if not isFarming then
-            local ap = rootPart:FindFirstChild("FlyPos")
+            local ap, ao = rootPart:FindFirstChild("FlyPos"), rootPart:FindFirstChild("FlyOri")
             if ap then ap.Enabled = false end
+            if ao then ao.Enabled = false end
             humanoid.PlatformStand = false
             humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
         end
@@ -470,4 +449,4 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 end)
 
 updateVisuals()
-print("MOBILE NEON GUI LOADED WITH L-SHAPE CLIMBING & ANTI-STUCK FIXES!")
+print("EGG MASTER PRO LOADED: GUI + WAYPOINTS + ANTI-ROCK FIX")
