@@ -2,6 +2,7 @@
 -- НАСТРОЙКИ
 local AutoStart = false -- На мобилках лучше выключить по умолчанию
 local VisualiseZones = true 
+local ForcedScanInterval = 10 -- Интервал принудительной проверки (в секундах)
 -- ==========================================
 
 local PathfindingService = game:GetService("PathfindingService")
@@ -27,11 +28,9 @@ local skippedEggs = {}
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "MobileFarmGui"
 screenGui.ResetOnSpawn = false
--- Пытаемся засунуть в CoreGui, если экзекутор позволяет, иначе в PlayerGui
 local successGui, errGui = pcall(function() screenGui.Parent = CoreGui end)
 if not successGui then screenGui.Parent = player:WaitForChild("PlayerGui") end
 
--- Главная рамка
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 160, 0, 100)
@@ -39,7 +38,7 @@ mainFrame.Position = UDim2.new(0.5, -80, 0.2, 0)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
-mainFrame.Draggable = true -- Для старых экзекуторов
+mainFrame.Draggable = true 
 mainFrame.Parent = screenGui
 
 local corner = Instance.new("UICorner")
@@ -48,10 +47,9 @@ corner.Parent = mainFrame
 
 local stroke = Instance.new("UIStroke")
 stroke.Thickness = 2
-stroke.Color = Color3.fromRGB(0, 255, 150) -- Неоновый зеленый
+stroke.Color = Color3.fromRGB(0, 255, 150)
 stroke.Parent = mainFrame
 
--- Заголовок
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 30)
 title.BackgroundTransparency = 1
@@ -61,7 +59,6 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 14
 title.Parent = mainFrame
 
--- Кнопка СТАРТ / СТОП
 local actionBtn = Instance.new("TextButton")
 actionBtn.Name = "ActionBtn"
 actionBtn.Size = UDim2.new(0, 130, 0, 45)
@@ -77,7 +74,6 @@ local btnCorner = Instance.new("UICorner")
 btnCorner.CornerRadius = UDim.new(0, 10)
 btnCorner.Parent = actionBtn
 
--- Кнопка сворачивания
 local minBtn = Instance.new("TextButton")
 minBtn.Size = UDim2.new(0, 25, 0, 25)
 minBtn.Position = UDim2.new(1, -30, 0, 5)
@@ -87,7 +83,7 @@ minBtn.TextColor3 = Color3.new(1, 1, 1)
 minBtn.TextSize = 20
 minBtn.Parent = mainFrame
 
--- Логика перетаскивания для новых мобилок (Touch Support)
+-- Логика перетаскивания
 local dragging, dragInput, dragStart, startPos
 local function update(input)
     local delta = input.Position - dragStart
@@ -110,7 +106,6 @@ UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then update(input) end
 end)
 
--- Логика кнопок
 minBtn.MouseButton1Click:Connect(function()
     if actionBtn.Visible then
         mainFrame:TweenSize(UDim2.new(0, 160, 0, 35), "Out", "Quad", 0.3, true)
@@ -123,7 +118,7 @@ minBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ==== ФУНКЦИИ ФАРМА (ИНТЕГРАЦИЯ) ====
+-- ==== ФУНКЦИИ ФАРМА ====
 
 local function updateVisuals()
     if isFarming then
@@ -139,7 +134,6 @@ end
 
 actionBtn.MouseButton1Click:Connect(function()
     isFarming = not isFarming
-    print("Farm: " .. (isFarming and "ON" or "OFF"))
     updateVisuals()
     if not isFarming then
         local ap = rootPart:FindFirstChild("FlyPos")
@@ -150,7 +144,7 @@ actionBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==== ВЕБХУК ====
-local WebhookURL = "https://discord.com/api/webhooks/1487809809561555127/dgpdUBqGId8AXEVMn0EO1eUvyCxvjO1rEkIO5c2pdcF1vcmzkI0YQmP3Paa1owLHzsgt" -- https://discord.com/api/webhooks/1487682721944965256/tz1C65I8X7_cprV0e19VDgfHGwydM0mrsAN6n6j9Gm_cvUbs1_TMPrPsk0AOsbR0Bv8B
+local WebhookURL = "https://discord.com/api/webhooks/1487809809561555127/dgpdUBqGId8AXEVMn0EO1eUvyCxvjO1rEkIO5c2pdcF1vcmzkI0YQmP3Paa1owLHzsgt"
 local requestFunc = syn and syn.request or http_request or request
 
 local function sendWebhook(eggName, isSuccess)
@@ -175,7 +169,7 @@ local function sendWebhook(eggName, isSuccess)
     end)
 end
 
--- ==== ЗОНЫ (Координаты из прошлого) ====
+-- ==== ЗОНЫ ====
 local blacklistZone1 = { Size = Vector3.new(150, 90, 150), CFrame = CFrame.new(-28.1648, 128.4687, -123.9840) }
 local islandZones = {
     [2] = { Parent = nil, Size = Vector3.new(60, 30, 60), CFrame = CFrame.new(220.6902, 100.0900, -625.0073),
@@ -195,7 +189,6 @@ local islandZones = {
     }
 }
 
--- DEX Visualise
 if VisualiseZones then
     local fZones = workspace:FindFirstChild("FarmZones") or Instance.new("Folder", workspace)
     fZones.Name = "FarmZones"
@@ -227,18 +220,38 @@ rayParams.FilterType, rayParams.RespectCanCollide, rayParams.IgnoreWater = Enum.
 
 player.CharacterAdded:Connect(function(nc) character, humanoid, rootPart = nc, nc:WaitForChild("Humanoid"), nc:WaitForChild("HumanoidRootPart") end)
 
+-- ==== ЛОГИКА ОПРЕДЕЛЕНИЯ ЯИЦ ====
 local function checkAndAddEgg(obj)
-    if targetPriorities[obj.Name] then
+    if targetPriorities[obj.Name] and not activeEggs[obj] then
         local p = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart", true)
         if p then
-            if checkZone(p.Position) == "BLACKLIST" then blacklist[obj] = true
-            else activeEggs[obj] = p end
+            if checkZone(p.Position) == "BLACKLIST" then 
+                blacklist[obj] = true
+            else 
+                activeEggs[obj] = p 
+            end
         end
     end
 end
+
+-- Первичный сбор
 for _, o in ipairs(workspace:GetDescendants()) do checkAndAddEgg(o) end
+
+-- Автоматический сбор при появлении
 workspace.DescendantAdded:Connect(checkAndAddEgg)
 workspace.DescendantRemoving:Connect(function(o) activeEggs[o] = nil; blacklist[o] = nil; skippedEggs[o] = nil end)
+
+-- ПРИНУДИТЕЛЬНАЯ ПРОВЕРКА КАЖДЫЕ 10 СЕКУНД
+task.spawn(function()
+    while true do
+        task.wait(ForcedScanInterval)
+        if isFarming then
+            for _, o in ipairs(workspace:GetDescendants()) do
+                checkAndAddEgg(o)
+            end
+        end
+    end
+end)
 
 local function getBestEgg()
     local bestO, bestP, bestPr, minDist = nil, nil, -1, math.huge
@@ -258,6 +271,7 @@ local function getBestEgg()
     return bestO, bestP
 end
 
+-- ==== ПЕРЕДВИЖЕНИЕ И ФУНКЦИИ ФАРМА (FLY / PATH) ====
 local function flyTo(targetPos, isJump, maxTime, checkEgg)
     if not humanoid or humanoid.Health <= 0 then return false end
     local att = rootPart:FindFirstChild("FlyAtt") or Instance.new("Attachment", rootPart)
@@ -402,6 +416,7 @@ local function huntTarget(obj, p)
             if status ~= "Reached" then flyTo(rootPart.Position + (p.Position - rootPart.Position).Unit * 15, false, 0.8, p) end
         end
     end
+    -- Возврат в общую зону (если нужно)
     local myZone = checkZone(rootPart.Position)
     while typeof(myZone) == "number" do
         local data = islandZones[myZone]
@@ -411,12 +426,19 @@ local function huntTarget(obj, p)
     activeEggs[obj] = nil
 end
 
+-- ГЛАВНЫЙ ЦИКЛ ФАРМА
 task.spawn(function()
     while true do
         if isFarming and humanoid and humanoid.Health > 0 then
             local o, p = getBestEgg()
-            if o and p then huntTarget(o, p) else task.wait(0.5) end
-        else task.wait(0.5) end
+            if o and p then 
+                huntTarget(o, p) 
+            else 
+                task.wait(0.5) 
+            end
+        else 
+            task.wait(0.5) 
+        end
         task.wait(0.05)
     end
 end)
@@ -435,4 +457,4 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 end)
 
 updateVisuals()
-print("MOBILE NEON GUI LOADED!")
+print("MOBILE NEON GUI LOADED WITH 10S AUTO-SCAN!")
