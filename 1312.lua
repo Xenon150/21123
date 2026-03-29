@@ -1,9 +1,9 @@
 -- ==========================================
 -- УЛЬТРА-ОПТИМИЗИРОВАННЫЙ EGG FARM (MOBILE LITE EDITION)
--- (GUI, ТОЧКИ ЗОН, АНТИ-КАМЕНЬ, Г-ВЗБИРАНИЕ, LEGIT SPEED)
+-- (GUI, ТОЧКИ ЗОН, АНТИ-КАМЕНЬ У НОГ, Г-ВЗБИРАНИЕ, LEGIT SPEED)
 -- ==========================================
 local AutoStart = false 
-local ForcedScanInterval = 30 -- На мобилках лучше проверять реже, бережем процессор
+local ForcedScanInterval = 30 
 -- ==========================================
 
 local PathfindingService = game:GetService("PathfindingService")
@@ -185,7 +185,6 @@ local function scanWorkspace()
     local descendants = workspace:GetDescendants()
     for i, o in ipairs(descendants) do 
         checkAndAddEgg(o)
-        -- Мобильная оптимизация: пауза чаще, чтобы не фризить игру
         if i % 100 == 0 then task.wait() end 
     end
 end
@@ -208,7 +207,6 @@ local function getBestEgg()
         if not blacklist[o] and not tempSkips[o] then 
             if p and p.Parent and p.Transparency < 1 then
                 local pr = targetPriorities[o.Name] or 0
-                -- Оптимизация математики
                 local pPos = p.Position
                 local d = math.sqrt((rPos.X - pPos.X)^2 + (rPos.Y - pPos.Y)^2 + (rPos.Z - pPos.Z)^2)
                 
@@ -221,7 +219,7 @@ local function getBestEgg()
     return bestO, bestP
 end
 
--- ==== FLY SYSTEM (L-SHAPE + ANTI-ROCK MOBILIZED) ====
+-- ==== FLY SYSTEM (L-SHAPE + FEET RAYCAST) ====
 local function setupFly()
     local att = rootPart:FindFirstChild("FlyAtt") or Instance.new("Attachment", rootPart)
     att.Name = "FlyAtt"
@@ -251,7 +249,6 @@ local function flyTo(targetPos, isJump, maxTime)
         local cPos = rootPart.Position
         local tX, tY, tZ = targetPos.X, bY, targetPos.Z
         
-        -- Мобильная оптимизация математики (без создания лишних Vector3)
         local dx, dz = tX - cPos.X, tZ - cPos.Z
         local flatDist = math.sqrt(dx*dx + dz*dz)
         
@@ -259,8 +256,12 @@ local function flyTo(targetPos, isJump, maxTime)
         if flatDist > 0.1 then mDir = Vector3.new(dx, 0, dz).Unit end
 
         if mDir ~= Vector3.zero then
-            local hitObstacle = workspace:Raycast(cPos, mDir * 4, rayParams)
-            if hitObstacle then
+            -- СКАНИРУЕМ У ПУЗА И У САМЫХ НОГ (чтобы не спотыкаться об кубики)
+            local hitMid = workspace:Raycast(cPos, mDir * 4, rayParams)
+            local hitFeet = workspace:Raycast(cPos - Vector3.new(0, 2.5, 0), mDir * 4, rayParams)
+            
+            if hitMid or hitFeet then
+                -- Если хоть один луч задел камень — взлетаем
                 ap.Position = Vector3.new(cPos.X, cPos.Y + 15, cPos.Z)
                 return
             end
@@ -450,4 +451,4 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 end)
 
 updateVisuals()
-print("MOBILE EGG MASTER PRO LOADED: OPTIMIZED & SMOOTH")
+print("MOBILE EGG MASTER PRO LOADED: FEET RAYCAST ACTIVE")
