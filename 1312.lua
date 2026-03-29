@@ -291,29 +291,33 @@ local function flyTo(targetPos, isJump, maxTime, checkEgg)
     local reached, stuckT, lastP, startT, lastS, lastG = false, 0, rootPart.Position, tick(), tick(), tick()
     rayParams.FilterDescendantsInstances = {character}
     
+    -- ФИКС 1: Новая логика парения (Г-образные прыжки без полета в космос)
     local hover = RunService.Heartbeat:Connect(function()
         if not isFarming or humanoid.Health <= 0 then return end
         if checkEgg and (not checkEgg.Parent) then return end
         local mDir = (Vector3.new(targetPos.X, 0, targetPos.Z) - Vector3.new(rootPart.Position.X, 0, rootPart.Position.Z))
         if mDir.Magnitude > 0.1 then mDir = mDir.Unit else mDir = Vector3.zero end
-        local hitF = workspace:Raycast(rootPart.Position + Vector3.new(0,5,0), Vector3.new(0,-30,0), rayParams)
-        if hitF and hitF.Instance.CanCollide == false then hitF = nil end
-        local hitL = workspace:Raycast(rootPart.Position + Vector3.new(0,-1.5,0), mDir*3, rayParams)
-        local hitH = workspace:Raycast(rootPart.Position + Vector3.new(0,1.5,0), mDir*3, rayParams)
-        local hitC = workspace:Raycast(rootPart.Position, Vector3.new(0,5,0), rayParams)
+        
         local tY = bY
-        if hitF then 
-            local fY = hitF.Position.Y + hOff
-            if fY < (rootPart.Position.Y + 2) then
-                if math.abs(tY - fY) < 3.5 then tY = fY else tY = math.max(tY, fY) end
+        
+        -- Лучим вниз, чтобы сразу падать на землю (прямой угол)
+        local hitF = workspace:Raycast(rootPart.Position + Vector3.new(0, 5, 0), Vector3.new(0, -50, 0), rayParams)
+        if hitF and hitF.Instance.CanCollide ~= false then 
+            tY = hitF.Position.Y + hOff
+        end
+        
+        -- Ищем препятствия спереди
+        local hitObstacle = workspace:Raycast(rootPart.Position, mDir * 4, rayParams)
+        if hitObstacle and hitObstacle.Instance.CanCollide ~= false then
+            -- Если перед нами стена, ищем её высоту (Г-образный подлет вверх)
+            local hitTop = workspace:Raycast(hitObstacle.Position + mDir * 2 + Vector3.new(0, 50, 0), Vector3.new(0, -50, 0), rayParams)
+            if hitTop then
+                tY = math.max(tY, hitTop.Position.Y + hOff + 2)
+            else
+                tY = math.max(tY, rootPart.Position.Y + 15) -- Если не нашли верх, безопасно прыгаем на 15 стадов
             end
         end
-        if hitL and not hitH and not hitC then tY = math.max(tY, hitL.Position.Y + hOff + 1)
-        elseif hitL and hitH and not hitC then tY = math.max(tY, rootPart.Position.Y + 4) end
-        if hitC then tY = math.min(tY, hitC.Position.Y - 2) end
-        if (Vector3.new(rootPart.Position.X, 0, rootPart.Position.Z) - Vector3.new(targetPos.X, 0, targetPos.Z)).Magnitude > 5 then
-            tY = math.min(tY, rootPart.Position.Y + 1.1)
-        end
+        
         ap.Position = Vector3.new(targetPos.X, tY, targetPos.Z)
     end)
 
@@ -321,15 +325,13 @@ local function flyTo(targetPos, isJump, maxTime, checkEgg)
         if checkEgg and (not checkEgg.Parent) then break end
         if maxTime and (tick() - startT >= maxTime) then break end
         task.wait()
-        if tick() - lastG >= 0.5 then
-            if rootPart.Position.Y > (bY + 15) then
-                rootPart.Velocity = Vector3.new(0, -50, 0)
-                ap.Position = Vector3.new(targetPos.X, bY, targetPos.Z)
-            end
-            lastG = tick()
-        end
+        
         ao.CFrame = CFrame.lookAt(rootPart.Position, Vector3.new(targetPos.X, rootPart.Position.Y, targetPos.Z))
-        if (Vector3.new(rootPart.Position.X, 0, rootPart.Position.Z) - Vector3.new(targetPos.X, 0, targetPos.Z)).Magnitude < math.max(1.5, humanoid.WalkSpeed / 12) then reached = true break end
+        if (Vector3.new(rootPart.Position.X, 0, rootPart.Position.Z) - Vector3.new(targetPos.X, 0, targetPos.Z)).Magnitude < math.max(1.5, humanoid.WalkSpeed / 12) then 
+            reached = true 
+            break 
+        end
+        
         if tick() - lastS >= 0.2 then
             if (rootPart.Position - lastP).Magnitude < 0.5 then 
                 stuckT = stuckT + 0.2
@@ -395,6 +397,7 @@ local function huntTarget(obj, p)
                 if tick() - huntStart > 60 then skippedEggs[obj] = tick() end
                 break
             end
+            
             if (rootPart.Position - p.Position).Magnitude < 8 then
                 humanoid.PlatformStand = false
                 humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
@@ -409,11 +412,21 @@ local function huntTarget(obj, p)
                 local wt = 0
                 while p and p.Parent and p.Transparency < 1 and wt < 2 do task.wait(0.1) wt = wt + 0.1 end
                 sendWebhook(eggName, true)
+                
+                -- ФИКС 2: Если мы "собрали" яйцо, но оно забагалось и не пропало, вносим его в ЧС, чтобы не зависать
+                if p and p.Parent and p.Transparency < 1 then
+                    blacklist[obj] = true 
+                end
                 break
             end
+            
             local status = smartPath(p.Position, p, huntStart)
             if status == "EggGone" or status == "Timeout" then if status == "Timeout" then skippedEggs[obj] = tick() end break end
-            if status ~= "Reached" then flyTo(rootPart.Position + (p.Position - rootPart.Position).Unit * 15, false, 0.8, p) end
+            
+            -- ФИКС 3: Если Pathfinding "дошел", но мы все еще далеко (баг стояния на месте)
+            if (rootPart.Position - p.Position).Magnitude > 7 then
+                flyTo(rootPart.Position + (p.Position - rootPart.Position).Unit * 10, false, 1.5, p) 
+            end
         end
     end
     -- Возврат в общую зону (если нужно)
@@ -457,4 +470,4 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 end)
 
 updateVisuals()
-print("MOBILE NEON GUI LOADED WITH 10S AUTO-SCAN!")
+print("MOBILE NEON GUI LOADED WITH L-SHAPE CLIMBING & ANTI-STUCK FIXES!")
