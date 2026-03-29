@@ -1,9 +1,9 @@
 -- ==========================================
--- УЛЬТРА-ОПТИМИЗИРОВАННЫЙ EGG FARM
+-- УЛЬТРА-ОПТИМИЗИРОВАННЫЙ EGG FARM (MOBILE LITE EDITION)
 -- (GUI, ТОЧКИ ЗОН, АНТИ-КАМЕНЬ, Г-ВЗБИРАНИЕ, LEGIT SPEED)
 -- ==========================================
 local AutoStart = false 
-local ForcedScanInterval = 10 
+local ForcedScanInterval = 30 -- На мобилках лучше проверять реже, бережем процессор
 -- ==========================================
 
 local PathfindingService = game:GetService("PathfindingService")
@@ -22,8 +22,8 @@ local rootPart = character:WaitForChild("HumanoidRootPart")
 -- ==== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====
 local isFarming = AutoStart
 local activeEggs = {}
-local blacklist = {} -- Только для хард-зоны
-local tempSkips = {} -- Временный скип забаганных яиц
+local blacklist = {} 
+local tempSkips = {} 
 
 -- ==== GUI ====
 local screenGui = Instance.new("ScreenGui")
@@ -107,7 +107,7 @@ minBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==== ВЕБХУК ====
-local WebhookURL = "https://discord.com/api/webhooks/1487809809561555127/dgpdUBqGId8AXEVMn0EO1eUvyCxvjO1rEkIO5c2pdcF1vcmzkI0YQmP3Paa1owLHzsgt"
+local WebhookURL = "https://discord.com/api/webhooks/1487682721944965256/tz1C65I8X7_cprV0e19VDgfHGwydM0mrsAN6n6j9Gm_cvUbs1_TMPrPsk0AOsbR0Bv8B"
 local requestFunc = syn and syn.request or http_request or request
 
 local function sendWebhook(eggName, isSuccess)
@@ -115,8 +115,7 @@ local function sendWebhook(eggName, isSuccess)
     task.spawn(function()
         pcall(function()
             requestFunc({
-                Url = WebhookURL,
-                Method = "POST",
+                Url = WebhookURL, Method = "POST",
                 Headers = {["Content-Type"] = "application/json"},
                 Body = HttpService:JSONEncode({
                     ["embeds"] = {{
@@ -186,7 +185,8 @@ local function scanWorkspace()
     local descendants = workspace:GetDescendants()
     for i, o in ipairs(descendants) do 
         checkAndAddEgg(o)
-        if i % 500 == 0 then task.wait() end 
+        -- Мобильная оптимизация: пауза чаще, чтобы не фризить игру
+        if i % 100 == 0 then task.wait() end 
     end
 end
 
@@ -203,11 +203,15 @@ end)
 
 local function getBestEgg()
     local bestO, bestP, bestPr, minDist = nil, nil, -1, math.huge
+    local rPos = rootPart.Position
     for o, p in pairs(activeEggs) do
         if not blacklist[o] and not tempSkips[o] then 
             if p and p.Parent and p.Transparency < 1 then
                 local pr = targetPriorities[o.Name] or 0
-                local d = (rootPart.Position - p.Position).Magnitude
+                -- Оптимизация математики
+                local pPos = p.Position
+                local d = math.sqrt((rPos.X - pPos.X)^2 + (rPos.Y - pPos.Y)^2 + (rPos.Z - pPos.Z)^2)
+                
                 if pr > bestPr or (pr == bestPr and d < minDist) then
                     bestO, bestP, bestPr, minDist = o, p, pr, d
                 end
@@ -217,7 +221,7 @@ local function getBestEgg()
     return bestO, bestP
 end
 
--- ==== FLY SYSTEM (L-SHAPE + ANTI-ROCK) ====
+-- ==== FLY SYSTEM (L-SHAPE + ANTI-ROCK MOBILIZED) ====
 local function setupFly()
     local att = rootPart:FindFirstChild("FlyAtt") or Instance.new("Attachment", rootPart)
     att.Name = "FlyAtt"
@@ -235,7 +239,7 @@ local function flyTo(targetPos, isJump, maxTime)
     local ap, ao = setupFly()
     humanoid.PlatformStand = true
     ap.Enabled, ao.Enabled = true, true
-    ap.MaxVelocity = humanoid.WalkSpeed -- Скорость легит
+    ap.MaxVelocity = humanoid.WalkSpeed
 
     local hOff = (humanoid.RigType == Enum.HumanoidRigType.R15) and (humanoid.HipHeight + rootPart.Size.Y / 2) or 3
     local bY = targetPos.Y + hOff
@@ -246,27 +250,24 @@ local function flyTo(targetPos, isJump, maxTime)
         
         local cPos = rootPart.Position
         local tX, tY, tZ = targetPos.X, bY, targetPos.Z
-        local flatDist = (Vector3.new(cPos.X, 0, cPos.Z) - Vector3.new(tX, 0, tZ)).Magnitude
         
-        -- ВЕКТОР НАПРАВЛЕНИЯ
-        local mDir = (Vector3.new(tX, 0, tZ) - Vector3.new(cPos.X, 0, cPos.Z))
-        if mDir.Magnitude > 0.1 then mDir = mDir.Unit else mDir = Vector3.zero end
+        -- Мобильная оптимизация математики (без создания лишних Vector3)
+        local dx, dz = tX - cPos.X, tZ - cPos.Z
+        local flatDist = math.sqrt(dx*dx + dz*dz)
+        
+        local mDir = Vector3.zero
+        if flatDist > 0.1 then mDir = Vector3.new(dx, 0, dz).Unit end
 
-        -- 1. АНТИ-КАМЕНЬ (Raycast прямо перед лицом)
         if mDir ~= Vector3.zero then
-            local hitObstacle = workspace:Raycast(cPos, mDir * 4, rayParams) -- Луч на 4 стада вперед
+            local hitObstacle = workspace:Raycast(cPos, mDir * 4, rayParams)
             if hitObstacle then
-                -- Перед носом препятствие! Подпрыгиваем СТРОГО ВВЕРХ
                 ap.Position = Vector3.new(cPos.X, cPos.Y + 15, cPos.Z)
                 return
             end
         end
 
-        -- 2. Г-ОБРАЗНОЕ ВЗБИРАНИЕ НА ПЛАТФОРМЫ
         if targetPos.Y > cPos.Y + 2 then
-            -- Если подошли к стене вплотную
             if flatDist < 6 then 
-                -- Поднимаемся вертикально
                 if cPos.Y < targetPos.Y + hOff + 0.5 then 
                     ap.Position = Vector3.new(cPos.X, targetPos.Y + hOff + 3, cPos.Z)
                     return
@@ -274,7 +275,6 @@ local function flyTo(targetPos, isJump, maxTime)
             end
         end
         
-        -- 3. ОБЫЧНЫЙ ПОЛЕТ
         ap.Position = Vector3.new(tX, tY, tZ)
     end)
 
@@ -284,20 +284,21 @@ local function flyTo(targetPos, isJump, maxTime)
         
         ao.CFrame = CFrame.lookAt(rootPart.Position, Vector3.new(targetPos.X, rootPart.Position.Y, targetPos.Z))
         
-        local currentFlatDist = (Vector3.new(rootPart.Position.X, 0, rootPart.Position.Z) - Vector3.new(targetPos.X, 0, targetPos.Z)).Magnitude
+        local cPos = rootPart.Position
+        local currentFlatDist = math.sqrt((cPos.X - targetPos.X)^2 + (cPos.Z - targetPos.Z)^2)
         
-        if currentFlatDist < 2.5 and math.abs(rootPart.Position.Y - bY) < 4 then 
+        if currentFlatDist < 2.5 and math.abs(cPos.Y - bY) < 4 then 
             reached = true 
             break 
         end
         
-        if (rootPart.Position - lastP).Magnitude < 0.1 then 
+        if math.sqrt((cPos.X - lastP.X)^2 + (cPos.Y - lastP.Y)^2 + (cPos.Z - lastP.Z)^2) < 0.1 then 
             stuckT = stuckT + task.wait()
             if stuckT > 1.5 then break end
         else 
             stuckT = 0 
         end
-        lastP = rootPart.Position
+        lastP = cPos
     end
     
     hover:Disconnect()
@@ -305,14 +306,10 @@ local function flyTo(targetPos, isJump, maxTime)
     return reached
 end
 
--- ВОССТАНОВЛЕННАЯ ЛОГИКА ЦЕПОЧЕК (ТОЧКИ ЗОН)
 local function getChainTo(targetId)
     local chain = {}
     local curr = targetId
-    while curr do 
-        table.insert(chain, 1, curr) 
-        curr = islandZones[curr].Parent 
-    end
+    while curr do table.insert(chain, 1, curr) curr = islandZones[curr].Parent end
     return chain
 end
 
@@ -325,7 +322,10 @@ local function smartPath(targetPos, checkPart, huntStart)
         if not isFarming or humanoid.Health <= 0 then return "Failed" end
         if huntStart and tick() - huntStart > 60 then return "Timeout" end
         if checkPart and (not checkPart.Parent or checkPart.Transparency == 1) then return "Failed" end
-        if (rootPart.Position - targetPos).Magnitude < 8 then return "Reached" end
+        
+        local cPos = rootPart.Position
+        if math.sqrt((cPos.X - targetPos.X)^2 + (cPos.Y - targetPos.Y)^2 + (cPos.Z - targetPos.Z)^2) < 8 then return "Reached" end
+        
         if not flyTo(wps[i].Position, wps[i].Action == Enum.PathWaypointAction.Jump, 3) then 
              flyTo(rootPart.Position + (-rootPart.CFrame.LookVector * 5), false, 0.5)
              return "Stuck" 
@@ -354,18 +354,19 @@ local function huntTarget(obj, p)
     local eggName, huntStart, tarZone, isEarlyExit = tostring(obj.Name), tick(), checkZone(p.Position), false
     local startZone = checkZone(rootPart.Position)
     
-    -- БЕГ ПО ТВОИМ ТОЧКАМ (ИЗ ЗОНЫ В ЗОНУ)
     if typeof(tarZone) == "number" and startZone ~= tarZone then
         local chain = getChainTo(tarZone)
         for _, zoneId in ipairs(chain) do
             if not isEarlyExit and checkZone(rootPart.Position) ~= zoneId then
                 local data = islandZones[zoneId]
-                -- Подлетаем к началу пути если мы далеко
-                if (rootPart.Position - data.Path[1]).Magnitude > 15 then
-                    local res = smartPath(data.Path[1], p, huntStart)
+                local cPos = rootPart.Position
+                local dPos = data.Path[1]
+                
+                if math.sqrt((cPos.X - dPos.X)^2 + (cPos.Y - dPos.Y)^2 + (cPos.Z - dPos.Z)^2) > 15 then
+                    local res = smartPath(dPos, p, huntStart)
                     if res == "Timeout" or res == "NoPath" then isEarlyExit = true end
                 end
-                -- Летим по точкам
+                
                 if not isEarlyExit then
                     for i = 1, #data.Path do
                         if not isFarming or humanoid.Health <= 0 or (tick() - huntStart > 60) then isEarlyExit = true break end
@@ -385,7 +386,9 @@ local function huntTarget(obj, p)
                 break 
             end
             
-            if (rootPart.Position - p.Position).Magnitude < 8 then
+            local cPos = rootPart.Position
+            local pPos = p.Position
+            if math.sqrt((cPos.X - pPos.X)^2 + (cPos.Y - pPos.Y)^2 + (cPos.Z - pPos.Z)^2) < 8 then
                 humanoid.PlatformStand = false
                 humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
                 task.wait(0.1)
@@ -396,12 +399,11 @@ local function huntTarget(obj, p)
                 while p and p.Parent and p.Transparency < 1 and wt < 2 do task.wait(0.1) wt = wt + 0.1 end
                 sendWebhook(eggName, true)
                 
-                tempSkips = {} -- Сбрасываем скипы
+                tempSkips = {} 
                 break
             end
             
-            -- Последний рывок до яйца (с анти-камнем)
-            local status = smartPath(p.Position, p, huntStart)
+            local status = smartPath(pPos, p, huntStart)
             if status == "Timeout" or status == "NoPath" or status == "Failed" then 
                 tempSkips[obj] = true 
                 break 
@@ -409,7 +411,6 @@ local function huntTarget(obj, p)
         end
     end
     
-    -- ВОЗВРАТ НАЗАД ПО ТОЧКАМ
     local myZone = checkZone(rootPart.Position)
     while typeof(myZone) == "number" do
         local data = islandZones[myZone]
@@ -449,4 +450,4 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 end)
 
 updateVisuals()
-print("EGG MASTER PRO LOADED: GUI + WAYPOINTS + ANTI-ROCK FIX")
+print("MOBILE EGG MASTER PRO LOADED: OPTIMIZED & SMOOTH")
