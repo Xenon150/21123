@@ -1,6 +1,6 @@
 -- ==========================================
 -- УЛЬТРА-ОПТИМИЗИРОВАННЫЙ EGG FARM (MOBILE LITE EDITION)
--- (GUI, ТОЧКИ ЗОН, АНТИ-КАМЕНЬ У НОГ, Г-ВЗБИРАНИЕ, LEGIT SPEED)
+-- V4.0: ПЛАВНЫЙ ПОДЪЁМ/СПУСК + АНТИ-ЗАСТРЕВАНИЕ
 -- ==========================================
 local AutoStart = false 
 local ForcedScanInterval = 30 
@@ -19,11 +19,59 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- ==== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====
 local isFarming = AutoStart
 local activeEggs = {}
 local blacklist = {} 
 local tempSkips = {} 
+
+-- ==== СПАВН ВСЕХ ПАРТОВ (КРАСНЫЕ ЗОНЫ) ====
+local debugZonesData = {
+    {Size = Vector3.new(10, 2.5, 10), CFrame = CFrame.new(180.654694, 83.9499969, -592.783386, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
+    {Size = Vector3.new(35, 2, 15), CFrame = CFrame.new(191.5, 97, -671, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
+    {Size = Vector3.new(16, 2, 25), CFrame = CFrame.new(130.5, 94, -675, 0, 0, 1, 0, 1, -0, -1, 0, 0)},
+    {Size = Vector3.new(10, 2, 25), CFrame = CFrame.new(94.5, 98, -647.5, 0, 0, 1, 0, 1, -0, -1, 0, 0)},
+    {Size = Vector3.new(11, 2, 20), CFrame = CFrame.new(98.5, 88.0000153, -426.5, 0, 0, 1, 0, 1, -0, -1, 0, 0)},
+    {Size = Vector3.new(20, 2, 4), CFrame = CFrame.new(83, 88.0000153, -429.5, 0, 0, 1, 0, 1, -0, -1, 0, 0)},
+    {Size = Vector3.new(8, 2, 16), CFrame = CFrame.new(77, 90.0000153, -442, 0, 0, 1, 0, 1, -0, -1, 0, 0)},
+    {Size = Vector3.new(10, 0.5, 5), CFrame = CFrame.new(173.322296, 86.5, -575.310608, 0.499959469, 0, 0.866048813, 0, 1, 0, -0.866048813, 0, 0.499959469)},
+    {Size = Vector3.new(7, 0.5, 2), CFrame = CFrame.new(189.179077, 87, -602.072876, 0.984812498, -0, -0.173621148, 0, 1, -0, 0.173621148, 0, 0.984812498)},
+    {Size = Vector3.new(6, 5, 18.999996185302734), CFrame = CFrame.new(171, 94, -681.5, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
+    {Size = Vector3.new(38, 2, 25), CFrame = CFrame.new(527, 94.0000153, -124, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
+    {Size = Vector3.new(10, 6, 20), CFrame = CFrame.new(541.158752, 117.000008, -268.721222, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
+    {Size = Vector3.new(2, 17, 5), CFrame = CFrame.new(566.847534, 190.999985, -165.76091, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
+    {Size = Vector3.new(7, 17, 4), CFrame = CFrame.new(569, 197.5, -170.5, 0, 0, 1, 0, 1, -0, -1, 0, 0)},
+    {Size = Vector3.new(7, 8, 5), CFrame = CFrame.new(583.261841, 220.999985, -223.692963, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
+    {Size = Vector3.new(7, 230, 25), CFrame = CFrame.new(626.5, 113.5, -192.5, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
+    {Size = Vector3.new(8, 236, 20), CFrame = CFrame.new(624, 118.000015, -157.5, 1, 0, 0, 0, 1, 0, 0, 0, 1)}
+}
+
+task.spawn(function()
+    local folderName = "RedDebugZones"
+    local folder = workspace:FindFirstChild(folderName)
+    if not folder then
+        folder = Instance.new("Folder")
+        folder.Name = folderName
+        folder.Parent = workspace
+    else
+        folder:ClearAllChildren()
+    end
+    for i, data in ipairs(debugZonesData) do
+        local part = Instance.new("Part")
+        part.Name = "Zone_" .. tostring(i)
+        part.Size = data.Size
+        part.CFrame = data.CFrame
+        part.Color = Color3.fromRGB(255, 0, 0)
+        part.Transparency = 0.8
+        part.Material = Enum.Material.SmoothPlastic
+        part.Anchored = true
+        part.CanCollide = true
+        local pathMod = Instance.new("PathfindingModifier")
+        pathMod.Label = "ClimbPlatform"
+        pathMod.PassThrough = false
+        pathMod.Parent = part
+        part.Parent = folder
+    end
+end)
 
 -- ==== GUI ====
 local screenGui = Instance.new("ScreenGui")
@@ -131,13 +179,11 @@ local function sendWebhook(eggName, isSuccess)
     end)
 end
 
--- ==== ЗОНЫ ====
+-- ==== ЗОНЫ (2 и 3 УДАЛЕНЫ) ====
 local blacklistZone1 = { Size = Vector3.new(150, 90, 150), CFrame = CFrame.new(-28.1648, 128.4687, -123.9840) }
 local islandZones = {
-    [2] = { Parent = nil, Size = Vector3.new(60, 30, 60), CFrame = CFrame.new(220.6902, 100.0900, -625.0073), Path = { Vector3.new(177.956, 93.500, -567.293), Vector3.new(180.733, 89.550, -585.324), Vector3.new(189.303, 89.532, -598.254), Vector3.new(198.556, 89.970, -606.730) }},
-    [3] = { Parent = nil, Size = Vector3.new(60, 25, 60), CFrame = CFrame.new(45.2101, 99.2500, -430.0402), Path = { Vector3.new(107.523, 92.000, -422.050), Vector3.new(93.153, 91.971, -427.461), Vector3.new(83.859, 91.979, -431.765), Vector3.new(75.233, 93.984, -442.595), Vector3.new(60.534, 100.965, -441.453) }},
     [4] = { Parent = nil, Size = Vector3.new(50, 20, 50), CFrame = CFrame.new(541.4514, 98.0000, -108.5778), Path = { Vector3.new(504.7574, 97.9906, -137.8735), Vector3.new(511.1336, 98.0000, -125.9527) }},
-    [5] = { Parent = 2, Size = Vector3.new(40, 20, 40), CFrame = CFrame.new(160, 100, -680.759), Path = { Vector3.new(186.326, 101.00, -675.180), Vector3.new(165.688, 100.00, -676.847) }},
+    [5] = { Parent = nil, Size = Vector3.new(40, 20, 40), CFrame = CFrame.new(160, 100, -680.759), Path = { Vector3.new(186.326, 101.00, -675.180), Vector3.new(165.688, 100.00, -676.847) }},
     [6] = { Parent = 5, Size = Vector3.new(50, 30, 50), CFrame = CFrame.new(119.151, 111.00, -666.513), Path = { Vector3.new(143.737, 97.969, -678.703), Vector3.new(131.039, 97.981, -678.368) }}
 }
 
@@ -167,7 +213,37 @@ player.CharacterAdded:Connect(function(nc)
 end)
 rayParams.FilterDescendantsInstances = {character}
 
--- ==== ЛОГИКА ОПРЕДЕЛЕНИЯ ЯИЦ ====
+-- ==== НАСТРОЙКА ОПАСНЫХ ЗОН ====
+local function setupDangerZones()
+    local map = workspace:FindFirstChild("Map")
+    if not map then return end
+    local function applyModifier(part)
+        if part:IsA("BasePart") then
+            if not part:FindFirstChild("DangerMod") then
+                local mod = Instance.new("PathfindingModifier")
+                mod.Name = "DangerMod"
+                mod.Label = "DangerZone"
+                mod.Parent = part
+            end
+        end
+    end
+    local miscs = map:FindFirstChild("Miscs")
+    if miscs then
+        local waterBlocks = miscs:FindFirstChild("WaterBlocks")
+        if waterBlocks then
+            for _, block in ipairs(waterBlocks:GetChildren()) do
+                if block.Name == "WaterBlock" then applyModifier(block) end
+            end
+        end
+    end
+    local lava = map:FindFirstChild("lava")
+    if lava then
+        for _, part in ipairs(lava:GetDescendants()) do applyModifier(part) end
+    end
+end
+setupDangerZones()
+
+-- ==== ЛОГИКА ЯИЦ ====
 local function checkAndAddEgg(obj)
     if targetPriorities[obj.Name] and not activeEggs[obj] then
         local p = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart", true)
@@ -182,6 +258,7 @@ local function checkAndAddEgg(obj)
 end
 
 local function scanWorkspace()
+    setupDangerZones()
     local descendants = workspace:GetDescendants()
     for i, o in ipairs(descendants) do 
         checkAndAddEgg(o)
@@ -209,7 +286,6 @@ local function getBestEgg()
                 local pr = targetPriorities[o.Name] or 0
                 local pPos = p.Position
                 local d = math.sqrt((rPos.X - pPos.X)^2 + (rPos.Y - pPos.Y)^2 + (rPos.Z - pPos.Z)^2)
-                
                 if pr > bestPr or (pr == bestPr and d < minDist) then
                     bestO, bestP, bestPr, minDist = o, p, pr, d
                 end
@@ -219,7 +295,9 @@ local function getBestEgg()
     return bestO, bestP
 end
 
--- ==== FLY SYSTEM (L-SHAPE + FEET RAYCAST) ====
+-- ================================================================
+-- ====  FLY SYSTEM V4.0: ПОДЪЁМ/СПУСК/АНТИ-СТАК  ====
+-- ================================================================
 local function setupFly()
     local att = rootPart:FindFirstChild("FlyAtt") or Instance.new("Attachment", rootPart)
     att.Name = "FlyAtt"
@@ -234,6 +312,7 @@ end
 
 local function flyTo(targetPos, isJump, maxTime)
     if not humanoid or humanoid.Health <= 0 then return false end
+
     local ap, ao = setupFly()
     humanoid.PlatformStand = true
     ap.Enabled, ao.Enabled = true, true
@@ -241,67 +320,115 @@ local function flyTo(targetPos, isJump, maxTime)
 
     local hOff = (humanoid.RigType == Enum.HumanoidRigType.R15) and (humanoid.HipHeight + rootPart.Size.Y / 2) or 3
     local bY = targetPos.Y + hOff
+
     local reached, stuckT, lastP, startT = false, 0, rootPart.Position, tick()
+    local stuckAttempts = 0
 
     local hover = RunService.Heartbeat:Connect(function()
         if not isFarming or humanoid.Health <= 0 then return end
-        
-        local cPos = rootPart.Position
-        local tX, tY, tZ = targetPos.X, bY, targetPos.Z
-        
-        local dx, dz = tX - cPos.X, tZ - cPos.Z
-        local flatDist = math.sqrt(dx*dx + dz*dz)
-        
-        local mDir = Vector3.zero
-        if flatDist > 0.1 then mDir = Vector3.new(dx, 0, dz).Unit end
 
+        local cPos = rootPart.Position
+        local tX, tZ = targetPos.X, targetPos.Z
+        local dx, dz = tX - cPos.X, tZ - cPos.Z
+        local flatDist = math.sqrt(dx * dx + dz * dz)
+        local heightDiff = bY - cPos.Y
+        local mDir = Vector3.zero
+
+        if flatDist > 0.3 then mDir = Vector3.new(dx, 0, dz).Unit end
+
+        local hasObstacleAhead = false
         if mDir ~= Vector3.zero then
-            -- СКАНИРУЕМ У ПУЗА И У САМЫХ НОГ (чтобы не спотыкаться об кубики)
             local hitMid = workspace:Raycast(cPos, mDir * 4, rayParams)
             local hitFeet = workspace:Raycast(cPos - Vector3.new(0, 2.5, 0), mDir * 4, rayParams)
-            
-            if hitMid or hitFeet then
-                -- Если хоть один луч задел камень — взлетаем
-                ap.Position = Vector3.new(cPos.X, cPos.Y + 15, cPos.Z)
-                return
-            end
+            hasObstacleAhead = (hitMid ~= nil) or (hitFeet ~= nil)
         end
 
-        if targetPos.Y > cPos.Y + 2 then
-            if flatDist < 6 then 
-                if cPos.Y < targetPos.Y + hOff + 0.5 then 
-                    ap.Position = Vector3.new(cPos.X, targetPos.Y + hOff + 3, cPos.Z)
-                    return
-                end
+        if heightDiff > 2 then
+            if hasObstacleAhead then
+                ap.Position = Vector3.new(cPos.X, cPos.Y + 12, cPos.Z)
+                return
             end
+            if flatDist < 5 then
+                ap.Position = Vector3.new(tX, bY + 1.5, tZ)
+                return
+            end
+            ap.Position = Vector3.new(tX, bY + 1.5, tZ)
+            return
         end
-        
-        ap.Position = Vector3.new(tX, tY, tZ)
+
+        if heightDiff < -2 then
+            if flatDist < 4 then
+                local blockBelow = workspace:Raycast(cPos, Vector3.new(0, -3, 0), rayParams)
+                if blockBelow and (cPos.Y - blockBelow.Position.Y) < 2.5 then
+                    local nudge = mDir * 5
+                    if nudge.Magnitude < 0.1 then nudge = rootPart.CFrame.RightVector * 4 end
+                    ap.Position = cPos + nudge + Vector3.new(0, -1, 0)
+                else
+                    ap.Position = Vector3.new(tX, bY, tZ)
+                end
+                return
+            end
+
+            if hasObstacleAhead then
+                if heightDiff < -10 then
+                    local side = rootPart.CFrame.RightVector * 5
+                    ap.Position = cPos + side + Vector3.new(0, -2, 0)
+                else
+                    ap.Position = Vector3.new(cPos.X, cPos.Y + 6, cPos.Z)
+                end
+                return
+            end
+            ap.Position = Vector3.new(tX, bY, tZ)
+            return
+        end
+
+        if hasObstacleAhead then
+            ap.Position = Vector3.new(cPos.X, cPos.Y + 10, cPos.Z)
+            return
+        end
+
+        ap.Position = Vector3.new(tX, bY, tZ)
     end)
 
     while not reached and isFarming and humanoid and humanoid.Health > 0 do
         if maxTime and (tick() - startT) >= maxTime then break end
         task.wait()
-        
+
         ao.CFrame = CFrame.lookAt(rootPart.Position, Vector3.new(targetPos.X, rootPart.Position.Y, targetPos.Z))
-        
+
         local cPos = rootPart.Position
         local currentFlatDist = math.sqrt((cPos.X - targetPos.X)^2 + (cPos.Z - targetPos.Z)^2)
-        
-        if currentFlatDist < 2.5 and math.abs(cPos.Y - bY) < 4 then 
-            reached = true 
-            break 
+
+        if currentFlatDist < 3 and math.abs(cPos.Y - bY) < 5 then
+            reached = true
+            break
         end
-        
-        if math.sqrt((cPos.X - lastP.X)^2 + (cPos.Y - lastP.Y)^2 + (cPos.Z - lastP.Z)^2) < 0.1 then 
+
+        local moved = math.sqrt((cPos.X - lastP.X)^2 + (cPos.Y - lastP.Y)^2 + (cPos.Z - lastP.Z)^2)
+        if moved < 0.12 then
             stuckT = stuckT + task.wait()
-            if stuckT > 1.5 then break end
-        else 
-            stuckT = 0 
+            if stuckT > 1.5 then
+                stuckAttempts = stuckAttempts + 1
+                stuckT = 0
+                if stuckAttempts >= 4 then break end
+
+                local hDiff = bY - cPos.Y
+                if hDiff < -3 then
+                    local sideDir = rootPart.CFrame.RightVector * (stuckAttempts % 2 == 0 and 7 or -7)
+                    ap.Position = cPos + sideDir + Vector3.new(0, -4, 0)
+                elseif hDiff > 3 then
+                    ap.Position = cPos - rootPart.CFrame.LookVector * 5 + Vector3.new(0, 10, 0)
+                else
+                    ap.Position = cPos - rootPart.CFrame.LookVector * 6 + Vector3.new(0, 3, 0)
+                end
+                task.wait(0.6)
+            end
+        else
+            stuckT = 0
         end
         lastP = cPos
     end
-    
+
     hover:Disconnect()
     ap.Enabled, ao.Enabled = false, false
     return reached
@@ -315,7 +442,17 @@ local function getChainTo(targetId)
 end
 
 local function smartPath(targetPos, checkPart, huntStart)
-    local path = PathfindingService:CreatePath({AgentRadius = 3, AgentHeight = 5, AgentCanJump = true, Costs = {Water = math.huge}})
+    local path = PathfindingService:CreatePath({
+        AgentRadius = 3, 
+        AgentHeight = 5, 
+        AgentCanJump = true, 
+        WaypointSpacing = 3,
+        Costs = {
+            Water = math.huge, 
+            DangerZone = math.huge, 
+            ClimbPlatform = 0.1
+        }
+    })
     local success, _ = pcall(function() path:ComputeAsync(rootPart.Position, targetPos) end)
     if not success or path.Status ~= Enum.PathStatus.Success then return "NoPath" end
     local wps = path:GetWaypoints()
@@ -327,9 +464,17 @@ local function smartPath(targetPos, checkPart, huntStart)
         local cPos = rootPart.Position
         if math.sqrt((cPos.X - targetPos.X)^2 + (cPos.Y - targetPos.Y)^2 + (cPos.Z - targetPos.Z)^2) < 8 then return "Reached" end
         
-        if not flyTo(wps[i].Position, wps[i].Action == Enum.PathWaypointAction.Jump, 3) then 
-             flyTo(rootPart.Position + (-rootPart.CFrame.LookVector * 5), false, 0.5)
-             return "Stuck" 
+        if not flyTo(wps[i].Position, wps[i].Action == Enum.PathWaypointAction.Jump, 4) then 
+            local cY = rootPart.Position.Y
+            local tY = wps[i].Position.Y
+            if cY > tY + 5 then
+                flyTo(rootPart.Position + rootPart.CFrame.RightVector * 6 + Vector3.new(0, -3, 0), false, 1)
+            elseif cY < tY - 5 then
+                flyTo(rootPart.Position - rootPart.CFrame.LookVector * 5 + Vector3.new(0, 8, 0), false, 1)
+            else
+                flyTo(rootPart.Position + (-rootPart.CFrame.LookVector * 5), false, 0.5)
+            end
+            return "Stuck" 
         end
     end
     return "Reached"
@@ -451,4 +596,3 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 end)
 
 updateVisuals()
-print("MOBILE EGG MASTER PRO LOADED: FEET RAYCAST ACTIVE")
