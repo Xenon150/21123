@@ -277,7 +277,7 @@ task.spawn(function()
 end)
 
 -- ==== ВЕБХУК ====
-local WebhookURL = "https://discord.com/api/webhooks/1487682721944965256/tz1C65I8X7_cprV0e19VDgfHGwydM0mrsAN6n6j9Gm_cvUbs1_TMPrPsk0AOsbR0Bv8B"
+local WebhookURL = "https://discord.com/api/webhooks/1488832159904043108/RBf3b0n4UI4FAlaGoSDdASBz6ll61xZ_jZZXEY-cm88s8YwlfMVWqBewezEPWPHnO6pm"
 
 local function getRequestFunc()
     if syn and syn.request then return syn.request end
