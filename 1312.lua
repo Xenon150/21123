@@ -1,9 +1,9 @@
 -- ==========================================
 -- УЛЬТРА-ОПТИМИЗИРОВАННЫЙ EGG FARM (MOBILE LITE EDITION)
--- V4.0: ПЛАВНЫЙ ПОДЪЁМ/СПУСК + АНТИ-ЗАСТРЕВАНИЕ
+-- V5.1: POINTS IN WEBHOOK + ROBUST TEXT DETECTION
 -- ==========================================
-local AutoStart = false 
-local ForcedScanInterval = 30 
+local AutoStart = false
+local ForcedScanInterval = 30
 -- ==========================================
 
 local PathfindingService = game:GetService("PathfindingService")
@@ -21,8 +21,9 @@ local rootPart = character:WaitForChild("HumanoidRootPart")
 
 local isFarming = AutoStart
 local activeEggs = {}
-local blacklist = {} 
-local tempSkips = {} 
+local blacklist = {}
+local tempSkips = {}
+local totalCollected = 0
 
 -- ==== СПАВН ВСЕХ ПАРТОВ (КРАСНЫЕ ЗОНЫ) ====
 local debugZonesData = {
@@ -73,59 +74,173 @@ task.spawn(function()
     end
 end)
 
--- ==== GUI ====
+-- ==== ЧТЕНИЕ ПОИНТОВ ИЗ GUI (КЭШИРОВАННОЕ) ====
+local cachedPointsLabel = nil
+
+local function findPointsLabel()
+    local ok, result = pcall(function()
+        for _, desc in ipairs(player.PlayerGui:GetDescendants()) do
+            if desc:IsA("TextLabel") then
+                local c = desc.TextColor3
+                if math.abs(c.R - 170/255) < 0.05
+                   and math.abs(c.G - 1) < 0.05
+                   and math.abs(c.B - 127/255) < 0.05 then
+                    local txt = desc.Text
+                    if txt:find("%[") or txt:find("%]") then
+                        continue
+                    end
+                    if txt == "" then
+                        continue
+                    end
+                    return desc
+                end
+            end
+        end
+        return nil
+    end)
+    return ok and result or nil
+end
+
+local function getPointsText()
+    -- если кэш валиден — просто читаем
+    if cachedPointsLabel and cachedPointsLabel.Parent then
+        local txt = cachedPointsLabel.Text
+        if not txt:find("%[") and not txt:find("%]") and txt ~= "" then
+            return txt
+        end
+    end
+    -- иначе ищем заново (один раз)
+    cachedPointsLabel = findPointsLabel()
+    if cachedPointsLabel then
+        return cachedPointsLabel.Text
+    end
+    return nil
+end
+
+-- фоновый поиск лейбла (не в момент сбора)
+task.spawn(function()
+    while true do
+        if not cachedPointsLabel or not cachedPointsLabel.Parent then
+            cachedPointsLabel = findPointsLabel()
+        end
+        task.wait(5)
+    end
+end)
+-- ==== GUI (ЧЁРНО-БЕЛАЯ, ЧИСТАЯ, МОБИЛЬНАЯ) ====
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "MobileFarmGui"
+screenGui.Name = "NexusEggFarm"
 screenGui.ResetOnSpawn = false
-local successGui, _ = pcall(function() screenGui.Parent = CoreGui end)
-if not successGui then screenGui.Parent = player:WaitForChild("PlayerGui") end
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+local okGui = pcall(function() screenGui.Parent = CoreGui end)
+if not okGui then screenGui.Parent = player:WaitForChild("PlayerGui") end
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 160, 0, 100)
-mainFrame.Position = UDim2.new(0.5, -80, 0.2, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+mainFrame.Size = UDim2.new(0, 180, 0, 140)
+mainFrame.Position = UDim2.new(0.5, -90, 0.15, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
-mainFrame.Draggable = true 
+mainFrame.Draggable = true
 mainFrame.Parent = screenGui
-Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 15)
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
 
-local stroke = Instance.new("UIStroke", mainFrame)
-stroke.Thickness = 2
-stroke.Color = Color3.fromRGB(0, 255, 150)
+local border = Instance.new("UIStroke", mainFrame)
+border.Thickness = 1.5
+border.Color = Color3.fromRGB(70, 70, 70)
 
-local title = Instance.new("TextLabel", mainFrame)
-title.Size = UDim2.new(1, 0, 0, 30)
+local titleBar = Instance.new("Frame", mainFrame)
+titleBar.Size = UDim2.new(1, 0, 0, 32)
+titleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+titleBar.BorderSizePixel = 0
+Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 12)
+
+local titleFix = Instance.new("Frame", titleBar)
+titleFix.Size = UDim2.new(1, 0, 0, 12)
+titleFix.Position = UDim2.new(0, 0, 1, -12)
+titleFix.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+titleFix.BorderSizePixel = 0
+
+local title = Instance.new("TextLabel", titleBar)
+title.Size = UDim2.new(1, -35, 1, 0)
+title.Position = UDim2.new(0, 10, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "EGG MASTER PRO"
-title.TextColor3 = Color3.new(1, 1, 1)
+title.Text = "Nexus Egg Farm"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.GothamBold
-title.TextSize = 14
+title.TextSize = 13
+title.TextXAlignment = Enum.TextXAlignment.Left
 
-local actionBtn = Instance.new("TextButton", mainFrame)
-actionBtn.Size = UDim2.new(0, 130, 0, 45)
-actionBtn.Position = UDim2.new(0.5, -65, 0.45, 0)
+local minBtn = Instance.new("TextButton", titleBar)
+minBtn.Size = UDim2.new(0, 24, 0, 24)
+minBtn.Position = UDim2.new(1, -28, 0.5, -12)
+minBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+minBtn.Text = "−"
+minBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+minBtn.TextSize = 16
+minBtn.Font = Enum.Font.GothamBold
+minBtn.BorderSizePixel = 0
+Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
+
+local content = Instance.new("Frame", mainFrame)
+content.Name = "Content"
+content.Size = UDim2.new(1, -16, 1, -40)
+content.Position = UDim2.new(0, 8, 0, 36)
+content.BackgroundTransparency = 1
+
+local statusLabel = Instance.new("TextLabel", content)
+statusLabel.Size = UDim2.new(1, 0, 0, 16)
+statusLabel.Position = UDim2.new(0, 0, 0, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "● Idle"
+statusLabel.TextColor3 = Color3.fromRGB(140, 140, 140)
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 11
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local countLabel = Instance.new("TextLabel", content)
+countLabel.Size = UDim2.new(1, 0, 0, 16)
+countLabel.Position = UDim2.new(0, 0, 0, 18)
+countLabel.BackgroundTransparency = 1
+countLabel.Text = "Collected: 0"
+countLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+countLabel.Font = Enum.Font.Gotham
+countLabel.TextSize = 11
+countLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local lastLabel = Instance.new("TextLabel", content)
+lastLabel.Size = UDim2.new(1, 0, 0, 16)
+lastLabel.Position = UDim2.new(0, 0, 0, 36)
+lastLabel.BackgroundTransparency = 1
+lastLabel.Text = "Last: —"
+lastLabel.TextColor3 = Color3.fromRGB(130, 130, 130)
+lastLabel.Font = Enum.Font.Gotham
+lastLabel.TextSize = 10
+lastLabel.TextXAlignment = Enum.TextXAlignment.Left
+lastLabel.TextTruncate = Enum.TextTruncate.AtEnd
+
+local actionBtn = Instance.new("TextButton", content)
+actionBtn.Size = UDim2.new(1, 0, 0, 36)
+actionBtn.Position = UDim2.new(0, 0, 1, -38)
 actionBtn.Font = Enum.Font.GothamBold
-actionBtn.TextSize = 16
-Instance.new("UICorner", actionBtn).CornerRadius = UDim.new(0, 10)
-
-local minBtn = Instance.new("TextButton", mainFrame)
-minBtn.Size = UDim2.new(0, 25, 0, 25)
-minBtn.Position = UDim2.new(1, -30, 0, 5)
-minBtn.BackgroundTransparency = 1
-minBtn.Text = "-"
-minBtn.TextColor3 = Color3.new(1, 1, 1)
-minBtn.TextSize = 20
+actionBtn.TextSize = 14
+actionBtn.BorderSizePixel = 0
+Instance.new("UICorner", actionBtn).CornerRadius = UDim.new(0, 8)
 
 local function updateVisuals()
     if isFarming then
-        actionBtn.Text = "STOP FARM"
-        actionBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        stroke.Color = Color3.fromRGB(255, 50, 50)
+        actionBtn.Text = "STOP"
+        actionBtn.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+        actionBtn.TextColor3 = Color3.fromRGB(20, 20, 20)
+        border.Color = Color3.fromRGB(200, 200, 200)
+        statusLabel.Text = "● Farming"
+        statusLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
     else
-        actionBtn.Text = "START FARM"
-        actionBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-        stroke.Color = Color3.fromRGB(0, 255, 150)
+        actionBtn.Text = "START"
+        actionBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        actionBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+        border.Color = Color3.fromRGB(70, 70, 70)
+        statusLabel.Text = "● Idle"
+        statusLabel.TextColor3 = Color3.fromRGB(140, 140, 140)
     end
 end
 
@@ -143,43 +258,124 @@ actionBtn.MouseButton1Click:Connect(function()
 end)
 
 minBtn.MouseButton1Click:Connect(function()
-    if actionBtn.Visible then
-        mainFrame:TweenSize(UDim2.new(0, 160, 0, 35), "Out", "Quad", 0.3, true)
-        actionBtn.Visible = false
+    if content.Visible then
+        content.Visible = false
+        mainFrame.Size = UDim2.new(0, 180, 0, 32)
         minBtn.Text = "+"
     else
-        mainFrame:TweenSize(UDim2.new(0, 160, 0, 100), "Out", "Quad", 0.3, true)
-        actionBtn.Visible = true
-        minBtn.Text = "-"
+        content.Visible = true
+        mainFrame.Size = UDim2.new(0, 180, 0, 140)
+        minBtn.Text = "−"
+    end
+end)
+
+task.spawn(function()
+    while screenGui.Parent do
+        countLabel.Text = "Collected: " .. totalCollected
+        task.wait(1)
     end
 end)
 
 -- ==== ВЕБХУК ====
 local WebhookURL = "https://discord.com/api/webhooks/1487682721944965256/tz1C65I8X7_cprV0e19VDgfHGwydM0mrsAN6n6j9Gm_cvUbs1_TMPrPsk0AOsbR0Bv8B"
-local requestFunc = syn and syn.request or http_request or request
 
-local function sendWebhook(eggName, isSuccess)
-    if not requestFunc or WebhookURL == "" then return end
+local function getRequestFunc()
+    if syn and syn.request then return syn.request end
+    if http_request then return http_request end
+    if request then return request end
+    if httpRequest then return httpRequest end
+    if fluxus and fluxus.request then return fluxus.request end
+    return nil
+end
+
+local targetPriorities = {
+    ["andromeda_egg"] = 100, ["angelic_egg"] = 100, ["blooming_egg"] = 100, ["dreamer_egg"] = 100, ["egg_v2"] = 100,
+    ["forest_egg"] = 100, ["hatch_egg"] = 100, ["royal_egg"] = 100, ["the_egg_of_the_sky"] = 100, ["placeholder_egg"] = 100,
+    ["random_potion_egg_2"] = 52, ["random_potion_egg_1"] = 51, ["point_egg_6"] = 16, ["point_egg_5"] = 15,
+    ["point_egg_4"] = 14, ["point_egg_3"] = 13, ["point_egg_2"] = 12, ["point_egg_1"] = 11
+}
+
+local function sendWebhook(eggName, isSuccess, pointsValue)
     task.spawn(function()
-        pcall(function()
-            requestFunc({
-                Url = WebhookURL, Method = "POST",
+        local reqFunc = getRequestFunc()
+        if not reqFunc or WebhookURL == "" then return end
+
+        local ok, err = pcall(function()
+            local priority = targetPriorities[eggName] or 0
+            local isPriority100 = (priority == 100)
+
+            local prettyName = eggName:gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end)
+
+            local rarityTag = "Common"
+            local embedColor = 8421504
+            if priority == 100 then
+                rarityTag = "LEGENDARY"
+                embedColor = 16766720
+            elseif priority >= 50 then
+                rarityTag = "Epic"
+                embedColor = 10494192
+            elseif priority >= 14 then
+                rarityTag = "Rare"
+                embedColor = 3447003
+            elseif priority >= 11 then
+                rarityTag = "Common"
+                embedColor = 8421504
+            end
+
+            if not isSuccess then
+                embedColor = 16711680
+            end
+
+            local pointsStr = pointsValue or "N/A"
+
+            local fields = {
+                {["name"] = "Egg", ["value"] = prettyName, ["inline"] = true},
+                {["name"] = "Rarity", ["value"] = rarityTag, ["inline"] = true},
+                {["name"] = "Priority", ["value"] = tostring(priority), ["inline"] = true},
+                {["name"] = "Total Collected", ["value"] = tostring(totalCollected), ["inline"] = true},
+                {["name"] = "Points", ["value"] = pointsStr, ["inline"] = true},
+                {["name"] = "Player", ["value"] = player.Name .. " (" .. player.DisplayName .. ")", ["inline"] = true}
+            }
+
+            local embedTitle
+            if isPriority100 then
+                embedTitle = "LEGENDARY EGG COLLECTED!"
+            elseif isSuccess then
+                embedTitle = "Egg Collected"
+            else
+                embedTitle = "Collection Failed"
+            end
+
+            local body = {
+                ["embeds"] = {{
+                    ["title"] = embedTitle,
+                    ["description"] = isSuccess and ("**" .. prettyName .. "** has been collected!") or ("Failed to collect **" .. prettyName .. "**"),
+                    ["color"] = embedColor,
+                    ["fields"] = fields,
+                    ["footer"] = {["text"] = "Nexus Egg Farm | " .. os.date("%H:%M:%S")},
+                    ["timestamp"] = DateTime.now():ToIsoDate()
+                }}
+            }
+
+            if isPriority100 then
+                body["content"] = "@everyone LEGENDARY EGG!"
+            end
+
+            reqFunc({
+                Url = WebhookURL,
+                Method = "POST",
                 Headers = {["Content-Type"] = "application/json"},
-                Body = HttpService:JSONEncode({
-                    ["embeds"] = {{
-                        ["title"] = isSuccess and "✅ Egg Collected!" or "❌ Action Failed",
-                        ["description"] = "Egg: " .. tostring(eggName),
-                        ["color"] = isSuccess and 65280 or 16711680,
-                        ["timestamp"] = DateTime.now():ToIsoDate(),
-                        ["footer"] = {["text"] = "User: " .. player.Name}
-                    }}
-                })
+                Body = HttpService:JSONEncode(body)
             })
         end)
+
+        if not ok then
+            warn("[Webhook Error]: " .. tostring(err))
+        end
     end)
 end
 
--- ==== ЗОНЫ (2 и 3 УДАЛЕНЫ) ====
+-- ==== ЗОНЫ ====
 local blacklistZone1 = { Size = Vector3.new(150, 90, 150), CFrame = CFrame.new(-28.1648, 128.4687, -123.9840) }
 local islandZones = {
     [4] = { Parent = nil, Size = Vector3.new(50, 20, 50), CFrame = CFrame.new(541.4514, 98.0000, -108.5778), Path = { Vector3.new(504.7574, 97.9906, -137.8735), Vector3.new(511.1336, 98.0000, -125.9527) }},
@@ -197,23 +393,15 @@ local function checkZone(pos)
     return nil
 end
 
-local targetPriorities = {
-    ["andromeda_egg"] = 100, ["angelic_egg"] = 100, ["blooming_egg"] = 100, ["dreamer_egg"] = 100, ["egg_v2"] = 100, 
-    ["forest_egg"] = 100, ["hatch_egg"] = 100, ["royal_egg"] = 100, ["the_egg_of_the_sky"] = 100, ["placeholder_egg"] = 100, 
-    ["random_potion_egg_2"] = 52, ["random_potion_egg_1"] = 51, ["point_egg_6"] = 16, ["point_egg_5"] = 15, 
-    ["point_egg_4"] = 14, ["point_egg_3"] = 13, ["point_egg_2"] = 12, ["point_egg_1"] = 11
-}
-
 local rayParams = RaycastParams.new()
 rayParams.FilterType, rayParams.RespectCanCollide, rayParams.IgnoreWater = Enum.RaycastFilterType.Exclude, true, true
 
-player.CharacterAdded:Connect(function(nc) 
-    character, humanoid, rootPart = nc, nc:WaitForChild("Humanoid"), nc:WaitForChild("HumanoidRootPart") 
+player.CharacterAdded:Connect(function(nc)
+    character, humanoid, rootPart = nc, nc:WaitForChild("Humanoid"), nc:WaitForChild("HumanoidRootPart")
     rayParams.FilterDescendantsInstances = {character}
 end)
 rayParams.FilterDescendantsInstances = {character}
 
--- ==== НАСТРОЙКА ОПАСНЫХ ЗОН ====
 local function setupDangerZones()
     local map = workspace:FindFirstChild("Map")
     if not map then return end
@@ -243,15 +431,14 @@ local function setupDangerZones()
 end
 setupDangerZones()
 
--- ==== ЛОГИКА ЯИЦ ====
 local function checkAndAddEgg(obj)
     if targetPriorities[obj.Name] and not activeEggs[obj] then
         local p = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart", true)
         if p then
-            if checkZone(p.Position) == "BLACKLIST" then 
+            if checkZone(p.Position) == "BLACKLIST" then
                 blacklist[obj] = true
-            else 
-                activeEggs[obj] = p 
+            else
+                activeEggs[obj] = p
             end
         end
     end
@@ -260,9 +447,9 @@ end
 local function scanWorkspace()
     setupDangerZones()
     local descendants = workspace:GetDescendants()
-    for i, o in ipairs(descendants) do 
+    for i, o in ipairs(descendants) do
         checkAndAddEgg(o)
-        if i % 100 == 0 then task.wait() end 
+        if i % 100 == 0 then task.wait() end
     end
 end
 
@@ -281,7 +468,7 @@ local function getBestEgg()
     local bestO, bestP, bestPr, minDist = nil, nil, -1, math.huge
     local rPos = rootPart.Position
     for o, p in pairs(activeEggs) do
-        if not blacklist[o] and not tempSkips[o] then 
+        if not blacklist[o] and not tempSkips[o] then
             if p and p.Parent and p.Transparency < 1 then
                 local pr = targetPriorities[o.Name] or 0
                 local pPos = p.Position
@@ -295,9 +482,7 @@ local function getBestEgg()
     return bestO, bestP
 end
 
--- ================================================================
--- ====  FLY SYSTEM V4.0: ПОДЪЁМ/СПУСК/АНТИ-СТАК  ====
--- ================================================================
+-- ==== FLY SYSTEM ====
 local function setupFly()
     local att = rootPart:FindFirstChild("FlyAtt") or Instance.new("Attachment", rootPart)
     att.Name = "FlyAtt"
@@ -346,10 +531,6 @@ local function flyTo(targetPos, isJump, maxTime)
         if heightDiff > 2 then
             if hasObstacleAhead then
                 ap.Position = Vector3.new(cPos.X, cPos.Y + 12, cPos.Z)
-                return
-            end
-            if flatDist < 5 then
-                ap.Position = Vector3.new(tX, bY + 1.5, tZ)
                 return
             end
             ap.Position = Vector3.new(tX, bY + 1.5, tZ)
@@ -443,13 +624,13 @@ end
 
 local function smartPath(targetPos, checkPart, huntStart)
     local path = PathfindingService:CreatePath({
-        AgentRadius = 3, 
-        AgentHeight = 5, 
-        AgentCanJump = true, 
+        AgentRadius = 3,
+        AgentHeight = 5,
+        AgentCanJump = true,
         WaypointSpacing = 3,
         Costs = {
-            Water = math.huge, 
-            DangerZone = math.huge, 
+            Water = math.huge,
+            DangerZone = math.huge,
             ClimbPlatform = 0.1
         }
     })
@@ -460,11 +641,11 @@ local function smartPath(targetPos, checkPart, huntStart)
         if not isFarming or humanoid.Health <= 0 then return "Failed" end
         if huntStart and tick() - huntStart > 60 then return "Timeout" end
         if checkPart and (not checkPart.Parent or checkPart.Transparency == 1) then return "Failed" end
-        
+
         local cPos = rootPart.Position
         if math.sqrt((cPos.X - targetPos.X)^2 + (cPos.Y - targetPos.Y)^2 + (cPos.Z - targetPos.Z)^2) < 8 then return "Reached" end
-        
-        if not flyTo(wps[i].Position, wps[i].Action == Enum.PathWaypointAction.Jump, 4) then 
+
+        if not flyTo(wps[i].Position, wps[i].Action == Enum.PathWaypointAction.Jump, 4) then
             local cY = rootPart.Position.Y
             local tY = wps[i].Position.Y
             if cY > tY + 5 then
@@ -474,7 +655,7 @@ local function smartPath(targetPos, checkPart, huntStart)
             else
                 flyTo(rootPart.Position + (-rootPart.CFrame.LookVector * 5), false, 0.5)
             end
-            return "Stuck" 
+            return "Stuck"
         end
     end
     return "Reached"
@@ -499,7 +680,7 @@ local function huntTarget(obj, p)
     if not p or not p.Parent then return end
     local eggName, huntStart, tarZone, isEarlyExit = tostring(obj.Name), tick(), checkZone(p.Position), false
     local startZone = checkZone(rootPart.Position)
-    
+
     if typeof(tarZone) == "number" and startZone ~= tarZone then
         local chain = getChainTo(tarZone)
         for _, zoneId in ipairs(chain) do
@@ -507,12 +688,12 @@ local function huntTarget(obj, p)
                 local data = islandZones[zoneId]
                 local cPos = rootPart.Position
                 local dPos = data.Path[1]
-                
+
                 if math.sqrt((cPos.X - dPos.X)^2 + (cPos.Y - dPos.Y)^2 + (cPos.Z - dPos.Z)^2) > 15 then
                     local res = smartPath(dPos, p, huntStart)
                     if res == "Timeout" or res == "NoPath" then isEarlyExit = true end
                 end
-                
+
                 if not isEarlyExit then
                     for i = 1, #data.Path do
                         if not isFarming or humanoid.Health <= 0 or (tick() - huntStart > 60) then isEarlyExit = true break end
@@ -522,47 +703,59 @@ local function huntTarget(obj, p)
             end
         end
     end
-    
+
     if not isEarlyExit then
         while p and p.Parent and p.Transparency < 1 do
             if not isFarming or humanoid.Health <= 0 then break end
-            
-            if tick() - huntStart > 60 then 
-                tempSkips[obj] = true 
-                break 
+
+            if tick() - huntStart > 60 then
+                tempSkips[obj] = true
+                break
             end
-            
+
             local cPos = rootPart.Position
             local pPos = p.Position
             if math.sqrt((cPos.X - pPos.X)^2 + (cPos.Y - pPos.Y)^2 + (cPos.Z - pPos.Z)^2) < 8 then
                 humanoid.PlatformStand = false
                 humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
                 task.wait(0.1)
-                
+
                 interactWithPrompt(obj)
-                
+
                 local wt = 0
                 while p and p.Parent and p.Transparency < 1 and wt < 2 do task.wait(0.1) wt = wt + 0.1 end
-                sendWebhook(eggName, true)
-                
-                tempSkips = {} 
+
+                totalCollected = totalCollected + 1
+
+                -- Читаем поинты (мгновенно из кэша)
+                local pointsNow = getPointsText()
+
+                -- Обновляем GUI
+                local prettyName = eggName:gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end)
+                lastLabel.Text = "Last: " .. prettyName
+                countLabel.Text = "Collected: " .. totalCollected
+
+                -- Вебхук в отдельном потоке (не блокирует)
+                sendWebhook(eggName, true, pointsNow)
+
+                tempSkips = {}
                 break
             end
-            
+
             local status = smartPath(pPos, p, huntStart)
-            if status == "Timeout" or status == "NoPath" or status == "Failed" then 
-                tempSkips[obj] = true 
-                break 
+            if status == "Timeout" or status == "NoPath" or status == "Failed" then
+                tempSkips[obj] = true
+                break
             end
         end
     end
-    
+
     local myZone = checkZone(rootPart.Position)
     while typeof(myZone) == "number" do
         local data = islandZones[myZone]
-        for i = #data.Path, 1, -1 do 
-            if not isFarming or humanoid.Health <= 0 then break end 
-            flyTo(data.Path[i], false, 6) 
+        for i = #data.Path, 1, -1 do
+            if not isFarming or humanoid.Health <= 0 then break end
+            flyTo(data.Path[i], false, 6)
         end
         myZone = data.Parent
     end
@@ -574,8 +767,8 @@ task.spawn(function()
         if isFarming and humanoid and humanoid.Health > 0 then
             local o, p = getBestEgg()
             if o and p then huntTarget(o, p) else task.wait(0.5) end
-        else 
-            task.wait(0.5) 
+        else
+            task.wait(0.5)
         end
         task.wait(0.05)
     end
