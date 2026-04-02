@@ -121,7 +121,7 @@ local function sendChatToDiscord(sender, message, info)
     end)
 end
 
--- Подключаем слушатель чата
+-- Подключаем слушатель чата (ОБНОВЛЕННАЯ ЛОГИКА)
 TextChatService.MessageReceived:Connect(function(textChatMessage)
     local rawText = textChatMessage.Text:lower()
     local senderName = "Unknown"
@@ -134,12 +134,29 @@ TextChatService.MessageReceived:Connect(function(textChatMessage)
         if match then senderName = match end
     end
 
-    -- Заменяем всю пунктуацию на пробелы и добавляем пробелы по краям для точного поиска целых слов
+    -- Проверяем, от Мерчанта ли сообщение (ищем либо по вырезанному имени, либо по тегу в самом тексте)
+    local isMerchant = (senderName:lower() == "merchant" or rawText:find("%[merchant%]"))
+    
+    -- Заменяем всю пунктуацию на пробелы и добавляем пробелы по краям для защиты от слов типа "during"
     local paddedText = " " .. rawText:gsub("[%p%c]", " ") .. " "
 
     for key, info in pairs(CHAT_CONFIG) do
-        -- Ищем именно слово целиком (с пробелами по бокам)
-        if paddedText:find(" " .. key .. " ", 1, true) then
+        local isFound = false
+        
+        if isMerchant then
+            -- 1. ЕСЛИ ЭТО МЕРЧАНТ: Пингуем в любом случае, даже если имя слиплось со знаками
+            if rawText:find(key) then
+                isFound = true
+            end
+        else
+            -- 2. ЕСЛИ ЭТО ИГРОК: Ищем строго слово целиком (с пробелами по бокам в очищенном тексте)
+            if paddedText:find(" " .. key .. " ", 1, true) then
+                isFound = true
+            end
+        end
+        
+        -- Если совпадение найдено — отправляем вебхук и останавливаем цикл
+        if isFound then
             sendChatToDiscord(senderName, textChatMessage.Text, info)
             break
         end
