@@ -1,6 +1,6 @@
 -- ==========================================
 -- УЛЬТРА-ОПТИМИЗИРОВАННЫЙ EGG FARM (MOBILE LITE EDITION)
--- V5.1: POINTS IN WEBHOOK + ROBUST TEXT DETECTION
+-- V6.0: 100% EGG DETECTION + NESTED MODELS SUPPORT
 -- ==========================================
 local AutoStart = false
 local ForcedScanInterval = 30
@@ -24,6 +24,7 @@ local activeEggs = {}
 local blacklist = {}
 local tempSkips = {}
 local totalCollected = 0
+local pendingEggs = {} -- яйца, которые ещё ждут появления BasePart
 
 -- ==== СПАВН ВСЕХ ПАРТОВ (КРАСНЫЕ ЗОНЫ) ====
 local debugZonesData = {
@@ -43,7 +44,8 @@ local debugZonesData = {
     {Size = Vector3.new(7, 17, 4), CFrame = CFrame.new(569, 197.5, -170.5, 0, 0, 1, 0, 1, -0, -1, 0, 0)},
     {Size = Vector3.new(7, 8, 5), CFrame = CFrame.new(583.261841, 220.999985, -223.692963, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
     {Size = Vector3.new(7, 230, 25), CFrame = CFrame.new(626.5, 113.5, -192.5, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
-    {Size = Vector3.new(8, 236, 20), CFrame = CFrame.new(624, 118.000015, -157.5, 1, 0, 0, 0, 1, 0, 0, 0, 1)}
+    {Size = Vector3.new(8, 236, 20), CFrame = CFrame.new(624, 118.000015, -157.5, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
+    {Size = Vector3.new(4, 8, 4), CFrame = CFrame.new(575.013, 187.000015, -225, 1, 0, 0, 0, 1, 0, 0, 0, 1)}
 }
 
 task.spawn(function()
@@ -102,14 +104,12 @@ local function findPointsLabel()
 end
 
 local function getPointsText()
-    -- если кэш валиден — просто читаем
     if cachedPointsLabel and cachedPointsLabel.Parent then
         local txt = cachedPointsLabel.Text
         if not txt:find("%[") and not txt:find("%]") and txt ~= "" then
             return txt
         end
     end
-    -- иначе ищем заново (один раз)
     cachedPointsLabel = findPointsLabel()
     if cachedPointsLabel then
         return cachedPointsLabel.Text
@@ -117,7 +117,6 @@ local function getPointsText()
     return nil
 end
 
--- фоновый поиск лейбла (не в момент сбора)
 task.spawn(function()
     while true do
         if not cachedPointsLabel or not cachedPointsLabel.Parent then
@@ -126,6 +125,7 @@ task.spawn(function()
         task.wait(5)
     end
 end)
+
 -- ==== GUI (ЧЁРНО-БЕЛАЯ, ЧИСТАЯ, МОБИЛЬНАЯ) ====
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "NexusEggFarm"
@@ -431,32 +431,177 @@ local function setupDangerZones()
 end
 setupDangerZones()
 
-local function checkAndAddEgg(obj)
-    if targetPriorities[obj.Name] and not activeEggs[obj] then
-        local p = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart", true)
-        if p then
-            if checkZone(p.Position) == "BLACKLIST" then
-                blacklist[obj] = true
-            else
-                activeEggs[obj] = p
+-- ==== СИСТЕМА ОБНАРУЖЕНИЯ ЯИЦ (100% DETECTION) ====
+
+-- Ищет egg-модель вверх по иерархии от любого объекта
+local function findEggAncestor(obj)
+    local current = obj
+    while current and current ~= workspace do
+        if targetPriorities[current.Name] then
+            return current
+        end
+        current = current.Parent
+    end
+    return nil
+end
+
+-- Пытается зарегистрировать яйцо (возвращает true если нашёл BasePart)
+local function tryRegisterEgg(eggModel)
+    if not eggModel or not eggModel.Parent then return false end
+    if not targetPriorities[eggModel.Name] then return false end
+    if activeEggs[eggModel] or blacklist[eggModel] then return true end -- уже обработано
+
+    local p = nil
+    if eggModel:IsA("BasePart") then
+        p = eggModel
+    else
+        -- Рекурсивный поиск BasePart внутри модели (любая вложенность)
+        p = eggModel:FindFirstChildWhichIsA("BasePart", true)
+    end
+
+    if p then
+        if checkZone(p.Position) == "BLACKLIST" then
+            blacklist[eggModel] = true
+        else
+            activeEggs[eggModel] = p
+        end
+        pendingEggs[eggModel] = nil -- убираем из ожидания
+        return true
+    end
+    return false
+end
+
+-- Запускает отложенную регистрацию для яйца, у которого ещё нет BasePart
+local function scheduleEggWatch(eggModel)
+    if not eggModel or not targetPriorities[eggModel.Name] then return end
+    if activeEggs[eggModel] or blacklist[eggModel] then return end
+    if pendingEggs[eggModel] then return end -- уже следим
+
+    pendingEggs[eggModel] = true
+
+    task.spawn(function()
+        -- Серия быстрых попыток
+        for _, delay in ipairs({0.1, 0.3, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0}) do
+            task.wait(delay)
+            if not eggModel or not eggModel.Parent then
+                pendingEggs[eggModel] = nil
+                return
             end
+            if tryRegisterEgg(eggModel) then
+                return
+            end
+        end
+
+        -- Если всё ещё не нашли — подписываемся на DescendantAdded
+        if eggModel and eggModel.Parent and not activeEggs[eggModel] and not blacklist[eggModel] then
+            local conn
+            conn = eggModel.DescendantAdded:Connect(function(desc)
+                if desc:IsA("BasePart") then
+                    if tryRegisterEgg(eggModel) then
+                        if conn and conn.Connected then
+                            conn:Disconnect()
+                        end
+                    end
+                end
+            end)
+
+            -- Автоотключение через 60 сек (на случай если яйцо никогда не получит BasePart)
+            task.delay(60, function()
+                if conn and conn.Connected then
+                    conn:Disconnect()
+                end
+                pendingEggs[eggModel] = nil
+            end)
+
+            -- Ещё одна попытка после подписки (на случай race condition)
+            task.wait(0.1)
+            if tryRegisterEgg(eggModel) then
+                if conn and conn.Connected then
+                    conn:Disconnect()
+                end
+            end
+        else
+            pendingEggs[eggModel] = nil
+        end
+    end)
+end
+
+-- Главная функция проверки объекта
+local function checkAndAddEgg(obj)
+    if not obj or not obj.Parent then return end
+
+    -- Случай 1: сам объект — это яйцо
+    if targetPriorities[obj.Name] then
+        if not tryRegisterEgg(obj) then
+            -- BasePart ещё не загрузился — ставим на отслеживание
+            scheduleEggWatch(obj)
+        end
+    end
+
+    -- Случай 2: объект — это BasePart внутри яйца (может быть на любом уровне вложенности)
+    if obj:IsA("BasePart") then
+        local eggAncestor = findEggAncestor(obj)
+        if eggAncestor then
+            tryRegisterEgg(eggAncestor)
+        end
+    end
+
+    -- Случай 3: объект — это промежуточная папка/модель внутри яйца (например "Egg", "Eggs")
+    -- Проверяем, есть ли у его предка имя яйца
+    if obj:IsA("Model") or obj:IsA("Folder") then
+        local eggAncestor = findEggAncestor(obj)
+        if eggAncestor and eggAncestor ~= obj then
+            -- Внутрь этой папки могли добавиться парты
+            tryRegisterEgg(eggAncestor)
         end
     end
 end
 
+-- Полное сканирование workspace
 local function scanWorkspace()
     setupDangerZones()
+
+    -- Сначала ищем все объекты с именами яиц
     local descendants = workspace:GetDescendants()
     for i, o in ipairs(descendants) do
-        checkAndAddEgg(o)
-        if i % 100 == 0 then task.wait() end
+        if targetPriorities[o.Name] then
+            if not tryRegisterEgg(o) then
+                scheduleEggWatch(o)
+            end
+        end
+        if i % 200 == 0 then task.wait() end
     end
 end
 
 scanWorkspace()
-workspace.DescendantAdded:Connect(checkAndAddEgg)
-workspace.DescendantRemoving:Connect(function(o) activeEggs[o] = nil; blacklist[o] = nil; tempSkips[o] = nil end)
 
+-- Слушаем ВСЕ новые объекты в workspace
+workspace.DescendantAdded:Connect(function(obj)
+    -- Маленькая задержка чтобы дочерние объекты успели подгрузиться
+    task.defer(function()
+        checkAndAddEgg(obj)
+    end)
+end)
+
+workspace.DescendantRemoving:Connect(function(o)
+    activeEggs[o] = nil
+    blacklist[o] = nil
+    tempSkips[o] = nil
+    pendingEggs[o] = nil
+
+    -- Если удаляется BasePart — проверяем, не был ли он привязан к яйцу
+    -- (яйцо потеряло свой парт, возможно исчезло)
+    local eggAncestor = findEggAncestor(o)
+    if eggAncestor then
+        -- Проверяем, есть ли ещё парт у этого яйца
+        local stillHasPart = eggAncestor:FindFirstChildWhichIsA("BasePart", true)
+        if not stillHasPart then
+            activeEggs[eggAncestor] = nil
+        end
+    end
+end)
+
+-- Периодическое полное сканирование
 task.spawn(function()
     while true do
         task.wait(ForcedScanInterval)
@@ -475,6 +620,25 @@ local function getBestEgg()
                 local d = math.sqrt((rPos.X - pPos.X)^2 + (rPos.Y - pPos.Y)^2 + (rPos.Z - pPos.Z)^2)
                 if pr > bestPr or (pr == bestPr and d < minDist) then
                     bestO, bestP, bestPr, minDist = o, p, pr, d
+                end
+            else
+                -- Парт исчез — пробуем найти новый
+                if o and o.Parent then
+                    local newP = o:FindFirstChildWhichIsA("BasePart", true)
+                    if newP and newP.Transparency < 1 then
+                        activeEggs[o] = newP
+                        p = newP
+                        local pr = targetPriorities[o.Name] or 0
+                        local pPos = p.Position
+                        local d = math.sqrt((rPos.X - pPos.X)^2 + (rPos.Y - pPos.Y)^2 + (rPos.Z - pPos.Z)^2)
+                        if pr > bestPr or (pr == bestPr and d < minDist) then
+                            bestO, bestP, bestPr, minDist = o, p, pr, d
+                        end
+                    else
+                        activeEggs[o] = nil
+                    end
+                else
+                    activeEggs[o] = nil
                 end
             end
         end
@@ -662,7 +826,14 @@ local function smartPath(targetPos, checkPart, huntStart)
 end
 
 local function interactWithPrompt(obj)
-    local pr = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+    -- Ищем ProximityPrompt в самом объекте и во всех потомках
+    local pr = nil
+    if obj:IsA("ProximityPrompt") then
+        pr = obj
+    else
+        pr = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+    end
+
     if pr then
         if fireproximityprompt then
             fireproximityprompt(pr, 1)
@@ -673,7 +844,9 @@ local function interactWithPrompt(obj)
             task.wait(pr.HoldDuration + 0.2)
             VirtualInputManager:SendKeyEvent(false, key, false, game)
         end
+        return true
     end
+    return false
 end
 
 local function huntTarget(obj, p)
@@ -720,22 +893,25 @@ local function huntTarget(obj, p)
                 humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
                 task.wait(0.1)
 
-                interactWithPrompt(obj)
+                -- Пробуем взаимодействовать с яйцом и его потомками
+                local prompted = interactWithPrompt(obj)
+
+                -- Если не нашли промпт в модели — ищем в парте
+                if not prompted and p then
+                    interactWithPrompt(p)
+                end
 
                 local wt = 0
                 while p and p.Parent and p.Transparency < 1 and wt < 2 do task.wait(0.1) wt = wt + 0.1 end
 
                 totalCollected = totalCollected + 1
 
-                -- Читаем поинты (мгновенно из кэша)
                 local pointsNow = getPointsText()
 
-                -- Обновляем GUI
                 local prettyName = eggName:gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end)
                 lastLabel.Text = "Last: " .. prettyName
                 countLabel.Text = "Collected: " .. totalCollected
 
-                -- Вебхук в отдельном потоке (не блокирует)
                 sendWebhook(eggName, true, pointsNow)
 
                 tempSkips = {}
