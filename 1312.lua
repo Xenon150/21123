@@ -1,3 +1,22 @@
+-- ══════════════════════════════════════════
+-- НАСТРОЙКИ АККАУНТОВ И ССЫЛОК НА ПРИВАТКИ
+-- ══════════════════════════════════════════
+local ACCOUNTS = {
+    -- ["Ник"] = "Ссылка на приватку", (если ссылки нет, оставляй "")
+    ["Yippe8980"]            = "https://www.roblox.com/share?code=b391e85809fbb3439ed533cd8dc5448b&type=Server",
+    ["ggdgdhthgtgdghb"]      = "https://www.roblox.com/share?code=78cfa0c21970ca4fb5140d0cd9acdb6f&type=Server",
+    ["k0uhuqst2xbnwbbm"]     = "https://www.roblox.com/share?code=29ab404648869b459c53f77b6cffc2a5&type=Server",
+    ["c9zdadakrhm6dyqogoee"] = "https://www.roblox.com/share?code=aea8d1dbced7f847b231413eac1ac42c&type=Server",
+    ["5o9h2m7hu18jh9k8zog"]  = "https://www.roblox.com/share?code=dd14b7c7487be049a9e5b417c0e6a4db&type=Server",
+    ["7a5fir39k0eu5x"]       = "https://www.roblox.com/share?code=77ea1780b1e8234fbf412f7aacf9e44a&type=Server",
+    ["xh18pd8tl0tv88vcg7p"]  = "https://www.roblox.com/share?code=68216ea36fc03440a2de4d0b8ee37fd1&type=Server",
+    ["svtedusn3a8rbe6v"]     = "https://www.roblox.com/share?code=0a3e006e92e81f41bae4614f3ac7be32&type=Server",
+    ["6zcm2ejca9l32lwkl"]    = "https://www.roblox.com/share?code=1c7a9def5eb7a2449e23634c81ea09dc&type=Server",
+    ["cyhgv26p0ldamwhs2"]    = "https://www.roblox.com/share?code=dfc6433236824148a6d51e4b33135671&type=Server",
+    ["1p4ai22qkhfl3ykj8wdy"] = "https://www.roblox.com/share?code=0525f1dbb6fa1947a8492f5ff74bf3ac&type=Server",
+    ["sb6r3uir7d2rd56"]      = "https://www.roblox.com/share?code=2a8128e1f1e20541915cf51bbe0bcb5b&type=Server",
+}
+
 -- ==========================================
 -- СЕРВИСЫ
 -- ==========================================
@@ -15,6 +34,17 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
+-- ОПРЕДЕЛЯЕМ АККАУНТ И ССЫЛКУ
+local playerName = player.Name:lower()
+local accountLink = nil
+
+for nick, link in pairs(ACCOUNTS) do
+    if playerName == nick:lower() then
+        accountLink = link
+        break
+    end
+end
+
 -- ==========================================
 -- УНИВЕРСАЛЬНАЯ ФУНКЦИЯ HTTP-ЗАПРОСОВ
 -- ==========================================
@@ -28,7 +58,7 @@ local function getRequestFunc()
 end
 
 -- ==========================================
--- СКРЫТЫЙ МОНИТОРИНГ ЧАТА (ФОНОВЫЙ ПРОЦЕСС)
+-- СКРЫТЫЙ МОНИТОРИНГ ЧАТА НА МЕРЧАНТОВ
 -- ==========================================
 local CHAT_WEBHOOK_URL = "https://discord.com/api/webhooks/1489315967455596714/dW3ann_p2G8xWEGj_ivisYWCY0kk9p_TM8Z7KL94xDcjrega3QyGQbzX04sNyYoqXRfl"
 
@@ -53,6 +83,11 @@ local function sendChatToDiscord(sender, message, info)
             sender, cleanedMessage, info.name
         )
 
+        -- Если аккаунт найден и ссылка не пустая, прикрепляем её
+        if accountLink and accountLink ~= "" then
+            description = description .. "\n\n🔗 **[Войти в сервер](" .. accountLink .. ")**"
+        end
+
         local body = {
             ["content"] = "@everyone продавец (ази пупсик)!",
             ["username"] = "nexus Monitor",
@@ -62,7 +97,7 @@ local function sendChatToDiscord(sender, message, info)
                 ["description"] = description,
                 ["color"] = info.color,
                 ["footer"] = {
-                    ["text"] = "Игра: " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name .. " • " .. os.date("%H:%M:%S")
+                    ["text"] = "Игра: " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name .. " • " .. os.date("%H:%M:%S") .. " | 👤 " .. player.Name
                 },
                 ["timestamp"] = DateTime.now():ToIsoDate()
             }}
@@ -86,7 +121,7 @@ local function sendChatToDiscord(sender, message, info)
     end)
 end
 
--- Подключаем слушатель чата (работает всегда, выключить нельзя)
+-- Подключаем слушатель чата
 TextChatService.MessageReceived:Connect(function(textChatMessage)
     local rawText = textChatMessage.Text:lower()
     local senderName = "Unknown"
