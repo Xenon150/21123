@@ -3,7 +3,7 @@
 -- ══════════════════════════════════════════
 local ACCOUNTS = {
     -- ["Ник"] = "Ссылка на приватку", (если ссылки нет, оставляй "")
-    ["Yippe8980"]            = "",
+    ["Yippe8980"]            = "https://www.roblox.com/share?code=b391e85809fbb3439ed533cd8dc5448b&type=Server",
     ["ggdgdhthgtgdghb"]      = "https://www.roblox.com/share?code=78cfa0c21970ca4fb5140d0cd9acdb6f&type=Server",
     ["k0uhuqst2xbnwbbm"]     = "https://www.roblox.com/share?code=29ab404648869b459c53f77b6cffc2a5&type=Server",
     ["c9zdadakrhm6dyqogoee"] = "https://www.roblox.com/share?code=aea8d1dbced7f847b231413eac1ac42c&type=Server",
