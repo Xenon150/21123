@@ -76,7 +76,7 @@ local BIOME_WEBHOOK_URL = "https://discord.com/api/webhooks/1487364754824630344/
 local PING_BIOMES = {
     "CYBERSPACE",
     "DREAMSPACE",
-    "corrupted",
+ --   "corrupted",
 }
 
 local trackedBiomeObjects = {}
