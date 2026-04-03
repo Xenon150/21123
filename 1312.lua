@@ -196,7 +196,8 @@ local debugZonesData = {
     {Size = Vector3.new(7, 8, 5), CFrame = CFrame.new(583.261841, 220.999985, -223.692963, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
     {Size = Vector3.new(7, 230, 25), CFrame = CFrame.new(626.5, 113.5, -192.5, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
     {Size = Vector3.new(8, 236, 20), CFrame = CFrame.new(624, 118.000015, -157.5, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
-    {Size = Vector3.new(4, 8, 4), CFrame = CFrame.new(575.013, 187.000015, -225, 1, 0, 0, 0, 1, 0, 0, 0, 1)}
+    {Size = Vector3.new(4, 8, 4), CFrame = CFrame.new(575.013, 187.000015, -225, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
+    {Size = Vector3.new(50, 2, 28.999996185302734), CFrame = CFrame.new(55, 101, -605.5, 1, 0, 0, 0, 1, 0, 0, 0, 1)}
 }
 
 task.spawn(function()
