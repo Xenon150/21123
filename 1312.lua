@@ -45,6 +45,12 @@ for nick, link in pairs(ACCOUNTS) do
     end
 end
 
+if accountLink then
+    print("[Tracker]: Аккаунт определён → " .. player.Name)
+else
+    print("[Tracker]: Аккаунт не найден в списке → " .. player.Name)
+end
+
 -- ==========================================
 -- УНИВЕРСАЛЬНАЯ ФУНКЦИЯ HTTP-ЗАПРОСОВ
 -- ==========================================
@@ -58,10 +64,135 @@ local function getRequestFunc()
 end
 
 -- ==========================================
--- СКРЫТЫЙ МОНИТОРИНГ ЧАТА НА МЕРЧАНТОВ
+-- ВЕБХУКИ И НАСТРОЙКИ
 -- ==========================================
 local CHAT_WEBHOOK_URL = "https://discord.com/api/webhooks/1489315967455596714/dW3ann_p2G8xWEGj_ivisYWCY0kk9p_TM8Z7KL94xDcjrega3QyGQbzX04sNyYoqXRfl"
+local FARM_WEBHOOK_URL = "https://discord.com/api/webhooks/1488832159904043108/RBf3b0n4UI4FAlaGoSDdASBz6ll61xZ_jZZXEY-cm88s8YwlfMVWqBewezEPWPHnO6pm"
+local BIOME_WEBHOOK_URL = "https://discord.com/api/webhooks/1487364754824630344/ksjs-O211EhlZoWUdT_cbipFKUf_UVJjAGZS__Gvg1LwkxyrZNBDqUveIHfyAr6UpAAj"
 
+-- ==========================================
+-- ФОНОВЫЙ МОНИТОРИНГ БИОМОВ
+-- ==========================================
+local PING_BIOMES = {
+    "CYBERSPACE",
+    "DREAMSPACE",
+    "corrupted",
+}
+
+local trackedBiomeObjects = {}
+local lastBiomeSent = ""
+
+local function sendBiomeToDiscord(title, description, ping)
+    local msg = title .. description
+    if lastBiomeSent == msg then return end
+    lastBiomeSent = msg
+
+    local fullDescription = description
+    if accountLink and accountLink ~= "" then
+        fullDescription = description .. "\n\n🔗 **[Войти в сервер](" .. accountLink .. ")**"
+    end
+
+    task.spawn(function()
+        local reqFunc = getRequestFunc()
+        if not reqFunc or BIOME_WEBHOOK_URL == "" then return end
+
+        pcall(function()
+            reqFunc({
+                Url = BIOME_WEBHOOK_URL,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = HttpService:JSONEncode({
+                    ["content"] = ping and "@everyone" or nil,
+                    ["embeds"] = {{
+                        ["title"] = title,
+                        ["description"] = fullDescription,
+                        ["color"] = ping and 16711680 or 16753488,
+                        ["timestamp"] = DateTime.now():ToIsoDate(),
+                        ["footer"] = {
+                            ["text"] = "👤 " .. player.Name
+                        }
+                    }}
+                })
+            })
+        end)
+    end)
+end
+
+local function isBiomLabel(v)
+    local ok, result = pcall(function()
+        return v:IsA("TextLabel")
+            and v.Parent ~= nil
+            and v.Parent:IsA("TextLabel")
+            and v.Text:match("^%[ .+ %]$") ~= nil
+    end)
+    return ok and result
+end
+
+local function shouldPingBiome(text)
+    for _, biom in pairs(PING_BIOMES) do
+        if text:lower():find(biom:lower(), 1, true) then return true end
+    end
+    if text:match("%d") then return true end
+    return false
+end
+
+local function handleBiom(text, title)
+    print("[Tracker]: " .. title .. " → " .. text)
+
+    if shouldPingBiome(text) then
+        sendBiomeToDiscord(title, "**Биом:** `" .. text .. "`", true)
+        return
+    end
+
+    task.spawn(function()
+        for i = 1, 3 do
+            task.wait(1)
+            if text:match("%d") then
+                sendBiomeToDiscord(title, "**Биом:** `" .. text .. "`", true)
+                return
+            end
+        end
+        sendBiomeToDiscord(title, "**Биом:** `" .. text .. "`", false)
+    end)
+end
+
+local function trackBiomeLabel(v)
+    local ok, _ = pcall(function()
+        if trackedBiomeObjects[v] or not isBiomLabel(v) then return end
+
+        trackedBiomeObjects[v] = true
+        handleBiom(v.Text, "🌍 Текущий биом")
+
+        v:GetPropertyChangedSignal("Text"):Connect(function()
+            if not v.Parent then return end
+            handleBiom(v.Text, "🔄 Смена биома!")
+        end)
+
+        v.AncestryChanged:Connect(function()
+            if not v.Parent then
+                trackedBiomeObjects[v] = nil
+            end
+        end)
+    end)
+end
+
+local pGui = player:WaitForChild("PlayerGui")
+task.spawn(function()
+    task.wait(0.5)
+    for _, v in pairs(pGui:GetDescendants()) do
+        trackBiomeLabel(v)
+    end
+end)
+
+pGui.DescendantAdded:Connect(function(v)
+    if not v:IsA("TextLabel") then return end
+    task.wait(0.1)
+    trackBiomeLabel(v)
+end)
+
+-- ==========================================
+-- СКРЫТЫЙ МОНИТОРИНГ ЧАТА НА МЕРЧАНТОВ
+-- ==========================================
 local CHAT_CONFIG = {
     ["jester"] = {color = 10181046, name = "Jester", emoji = "🎪"},
     ["mari"]   = {color = 16777215, name = "Mari", emoji = "🌙"},
@@ -83,7 +214,6 @@ local function sendChatToDiscord(sender, message, info)
             sender, cleanedMessage, info.name
         )
 
-        -- Если аккаунт найден и ссылка не пустая, прикрепляем её
         if accountLink and accountLink ~= "" then
             description = description .. "\n\n🔗 **[Войти в сервер](" .. accountLink .. ")**"
         end
@@ -121,7 +251,6 @@ local function sendChatToDiscord(sender, message, info)
     end)
 end
 
--- Подключаем слушатель чата (ОБНОВЛЕННАЯ ЛОГИКА)
 TextChatService.MessageReceived:Connect(function(textChatMessage)
     local rawText = textChatMessage.Text:lower()
     local senderName = "Unknown"
@@ -134,28 +263,17 @@ TextChatService.MessageReceived:Connect(function(textChatMessage)
         if match then senderName = match end
     end
 
-    -- Проверяем, от Мерчанта ли сообщение (ищем либо по вырезанному имени, либо по тегу в самом тексте)
     local isMerchant = (senderName:lower() == "merchant" or rawText:find("%[merchant%]"))
-    
-    -- Заменяем всю пунктуацию на пробелы и добавляем пробелы по краям для защиты от слов типа "during"
     local paddedText = " " .. rawText:gsub("[%p%c]", " ") .. " "
 
     for key, info in pairs(CHAT_CONFIG) do
         local isFound = false
-        
         if isMerchant then
-            -- 1. ЕСЛИ ЭТО МЕРЧАНТ: Пингуем в любом случае, даже если имя слиплось со знаками
-            if rawText:find(key) then
-                isFound = true
-            end
+            if rawText:find(key) then isFound = true end
         else
-            -- 2. ЕСЛИ ЭТО ИГРОК: Ищем строго слово целиком (с пробелами по бокам в очищенном тексте)
-            if paddedText:find(" " .. key .. " ", 1, true) then
-                isFound = true
-            end
+            if paddedText:find(" " .. key .. " ", 1, true) then isFound = true end
         end
         
-        -- Если совпадение найдено — отправляем вебхук и останавливаем цикл
         if isFound then
             sendChatToDiscord(senderName, textChatMessage.Text, info)
             break
@@ -175,8 +293,6 @@ local blacklist = {}
 local tempSkips = {}
 local totalCollected = 0
 local pendingEggs = {}
-
-local FARM_WEBHOOK_URL = "https://discord.com/api/webhooks/1488832159904043108/RBf3b0n4UI4FAlaGoSDdASBz6ll61xZ_jZZXEY-cm88s8YwlfMVWqBewezEPWPHnO6pm"
 
 local debugZonesData = {
     {Size = Vector3.new(10, 2.5, 10), CFrame = CFrame.new(180.654694, 83.9499969, -592.783386, 1, 0, 0, 0, 1, 0, 0, 0, 1)},
