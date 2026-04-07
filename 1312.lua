@@ -3,7 +3,7 @@
 -- ==========================================
 local ACCOUNTS = {
     ["Yippe8980"]            = "https://www.roblox.com/share?code=b391e85809fbb3439ed533cd8dc5448b&type=Server",
-    ["ggdgdhthgtgdghb"]      = "https://www.roblox.com/share?code=78cfa0c21970ca4fb5140d0cd9acdb6f&type=Server",
+    ["ggdgdhthgtgdhhb"]      = "https://www.roblox.com/share?code=78cfa0c21970ca4fb5140d0cd9acdb6f&type=Server",
     ["k0uhuqst2xbnwbbm"]     = "https://www.roblox.com/share?code=29ab404648869b459c53f77b6cffc2a5&type=Server",
     ["c9zdadakrhm6dyqogoee"] = "https://www.roblox.com/share?code=aea8d1dbced7f847b231413eac1ac42c&type=Server",
     ["5o9h2m7hu18jh9k8zog"]  = "https://www.roblox.com/share?code=dd14b7c7487be049a9e5b417c0e6a4db&type=Server",
@@ -19,14 +19,14 @@ local ACCOUNTS = {
 -- ==========================================
 -- СЕРВИСЫ
 -- ==========================================
-local HttpService          = game:GetService("HttpService")
-local TextChatService      = game:GetService("TextChatService")
-local Players              = game:GetService("Players")
-local PathfindingService   = game:GetService("PathfindingService")
-local VirtualInputManager  = game:GetService("VirtualInputManager")
-local UserInputService     = game:GetService("UserInputService")
-local RunService           = game:GetService("RunService")
-local CoreGui              = game:GetService("CoreGui")
+local HttpService         = game:GetService("HttpService")
+local TextChatService     = game:GetService("TextChatService")
+local Players             = game:GetService("Players")
+local PathfindingService  = game:GetService("PathfindingService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local UserInputService    = game:GetService("UserInputService")
+local RunService          = game:GetService("RunService")
+local CoreGui             = game:GetService("CoreGui")
 
 local player    = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
@@ -36,14 +36,12 @@ local rootPart  = character:WaitForChild("HumanoidRootPart")
 -- ОПРЕДЕЛЯЕМ АККАУНТ И ССЫЛКУ
 local playerName = player.Name:lower()
 local accountLink = nil
-
 for nick, link in pairs(ACCOUNTS) do
     if playerName == nick:lower() then
         accountLink = link
         break
     end
 end
-
 if accountLink then
     print("[Tracker]: Аккаунт определён → " .. player.Name)
 else
@@ -63,20 +61,16 @@ local function getRequestFunc()
 end
 
 -- ==========================================
--- ВЕБХУКИ И НАСТРОЙКИ
+-- ВЕБХУКИ
 -- ==========================================
 local CHAT_WEBHOOK_URL  = "https://discord.com/api/webhooks/1489315967455596714/dW3ann_p2G8xWEGj_ivisYWCY0kk9p_TM8Z7KL94xDcjrega3QyGQbzX04sNyYoqXRfl"
 local FARM_WEBHOOK_URL  = "https://discord.com/api/webhooks/1488832159904043108/RBf3b0n4UI4FAlaGoSDdASBz6ll61xZ_jZZXEY-cm88s8YwlfMVWqBewezEPWPHnO6pm"
 local BIOME_WEBHOOK_URL = "https://discord.com/api/webhooks/1487364754824630344/ksjs-O211EhlZoWUdT_cbipFKUf_UVJjAGZS__Gvg1LwkxyrZNBDqUveIHfyAr6UpAAj"
 
 -- ==========================================
--- ФОНОВЫЙ МОНИТОРИНГ БИОМОВ
+-- МОНИТОРИНГ БИОМОВ
 -- ==========================================
-local PING_BIOMES = {
-    "CYBERSPACE",
-    "DREAMSPACE",
-}
-
+local PING_BIOMES = {"CYBERSPACE", "DREAMSPACE"}
 local trackedBiomeObjects = {}
 local lastBiomeSent = ""
 
@@ -84,22 +78,19 @@ local function sendBiomeToDiscord(title, description, ping)
     local msg = title .. description
     if lastBiomeSent == msg then return end
     lastBiomeSent = msg
-
     local fullDescription = description
     if accountLink and accountLink ~= "" then
         fullDescription = description .. "\n\n🔗 **[Войти в сервер](" .. accountLink .. ")**"
     end
-
     task.spawn(function()
         local reqFunc = getRequestFunc()
         if not reqFunc or BIOME_WEBHOOK_URL == "" then return end
-
         pcall(function()
             reqFunc({
-                Url    = BIOME_WEBHOOK_URL,
-                Method = "POST",
+                Url     = BIOME_WEBHOOK_URL,
+                Method  = "POST",
                 Headers = {["Content-Type"] = "application/json"},
-                Body   = HttpService:JSONEncode({
+                Body    = HttpService:JSONEncode({
                     ["content"] = ping and "@everyone" or nil,
                     ["embeds"]  = {{
                         ["title"]       = title,
@@ -134,12 +125,10 @@ end
 
 local function handleBiom(text, title)
     print("[Tracker]: " .. title .. " → " .. text)
-
     if shouldPingBiome(text) then
         sendBiomeToDiscord(title, "**Биом:** `" .. text .. "`", true)
         return
     end
-
     task.spawn(function()
         for i = 1, 3 do
             task.wait(1)
@@ -153,21 +142,16 @@ local function handleBiom(text, title)
 end
 
 local function trackBiomeLabel(v)
-    local ok, _ = pcall(function()
+    pcall(function()
         if trackedBiomeObjects[v] or not isBiomLabel(v) then return end
-
         trackedBiomeObjects[v] = true
         handleBiom(v.Text, "🌍 Текущий биом")
-
         v:GetPropertyChangedSignal("Text"):Connect(function()
             if not v.Parent then return end
             handleBiom(v.Text, "🔄 Смена биома!")
         end)
-
         v.AncestryChanged:Connect(function()
-            if not v.Parent then
-                trackedBiomeObjects[v] = nil
-            end
+            if not v.Parent then trackedBiomeObjects[v] = nil end
         end)
     end)
 end
@@ -175,11 +159,8 @@ end
 local pGui = player:WaitForChild("PlayerGui")
 task.spawn(function()
     task.wait(0.5)
-    for _, v in pairs(pGui:GetDescendants()) do
-        trackBiomeLabel(v)
-    end
+    for _, v in pairs(pGui:GetDescendants()) do trackBiomeLabel(v) end
 end)
-
 pGui.DescendantAdded:Connect(function(v)
     if not v:IsA("TextLabel") then return end
     task.wait(0.1)
@@ -187,7 +168,7 @@ pGui.DescendantAdded:Connect(function(v)
 end)
 
 -- ==========================================
--- СКРЫТЫЙ МОНИТОРИНГ ЧАТА НА МЕРЧАНТОВ
+-- МОНИТОРИНГ ЧАТА НА МЕРЧАНТОВ
 -- ==========================================
 local CHAT_CONFIG = {
     ["jester"] = {color = 10181046, name = "Jester", emoji = "🎪"},
@@ -203,17 +184,14 @@ local function sendChatToDiscord(sender, message, info)
     task.spawn(function()
         local reqFunc = getRequestFunc()
         if not reqFunc or CHAT_WEBHOOK_URL == "" then return end
-
         local cleanedMessage = cleanRichText(message)
         local description = string.format(
             "**Отправитель:** %s\n**Сообщение:** %s\n**Триггер:** %s",
             sender, cleanedMessage, info.name
         )
-
         if accountLink and accountLink ~= "" then
             description = description .. "\n\n🔗 **[Войти в сервер](" .. accountLink .. ")**"
         end
-
         local body = {
             ["content"]    = "@everyone продавец (ази пупсик)!",
             ["username"]   = "nexus Monitor",
@@ -229,7 +207,6 @@ local function sendChatToDiscord(sender, message, info)
                 ["timestamp"] = DateTime.now():ToIsoDate()
             }}
         }
-
         local senderPlayer = Players:FindFirstChild(sender)
         if senderPlayer then
             body.embeds[1].thumbnail = {
@@ -237,7 +214,6 @@ local function sendChatToDiscord(sender, message, info)
                         .. senderPlayer.UserId .. "&width=150&height=150&format=png"
             }
         end
-
         pcall(function()
             reqFunc({
                 Url     = CHAT_WEBHOOK_URL,
@@ -252,7 +228,6 @@ end
 TextChatService.MessageReceived:Connect(function(textChatMessage)
     local rawText    = textChatMessage.Text:lower()
     local senderName = "Unknown"
-
     if textChatMessage.TextSource then
         senderName = textChatMessage.TextSource.Name
     else
@@ -260,10 +235,8 @@ TextChatService.MessageReceived:Connect(function(textChatMessage)
         local match = cleanMsg:match("^%[(.-)%]") or cleanMsg:match("^(.-):")
         if match then senderName = match end
     end
-
     local isMerchant = (senderName:lower() == "merchant" or rawText:find("%[merchant%]"))
     local paddedText = " " .. rawText:gsub("[%p%c]", " ") .. " "
-
     for key, info in pairs(CHAT_CONFIG) do
         local isFound = false
         if isMerchant then
@@ -271,7 +244,6 @@ TextChatService.MessageReceived:Connect(function(textChatMessage)
         else
             if paddedText:find(" " .. key .. " ", 1, true) then isFound = true end
         end
-
         if isFound then
             sendChatToDiscord(senderName, textChatMessage.Text, info)
             break
@@ -280,17 +252,17 @@ TextChatService.MessageReceived:Connect(function(textChatMessage)
 end)
 
 -- ==========================================
--- EGG FARM (MOBILE LITE EDITION)
+-- EGG FARM
 -- ==========================================
 local AutoStart          = false
 local ForcedScanInterval = 30
 local isFarming          = AutoStart
 local activeEggs         = {}
-local blacklist          = {}
 local tempSkips          = {}
 local totalCollected     = 0
 local pendingEggs        = {}
 
+-- ==== DEBUG ZONES ====
 local debugZonesData = {
     {Size = Vector3.new(10, 2.5, 10),  CFrame = CFrame.new(180.654694, 83.9499969, -592.783386, 1,0,0, 0,1,0, 0,0,1)},
     {Size = Vector3.new(35, 2, 15),    CFrame = CFrame.new(191.5, 97, -671, 1,0,0, 0,1,0, 0,0,1)},
@@ -325,19 +297,19 @@ task.spawn(function()
     end
     for i, data in ipairs(debugZonesData) do
         local part = Instance.new("Part")
-        part.Name          = "Zone_" .. tostring(i)
-        part.Size          = data.Size
-        part.CFrame        = data.CFrame
-        part.Color         = Color3.fromRGB(255, 0, 0)
-        part.Transparency  = 0.8
-        part.Material      = Enum.Material.SmoothPlastic
-        part.Anchored      = true
-        part.CanCollide    = true
-        local pathMod      = Instance.new("PathfindingModifier")
-        pathMod.Label      = "ClimbPlatform"
+        part.Name         = "Zone_" .. tostring(i)
+        part.Size         = data.Size
+        part.CFrame       = data.CFrame
+        part.Color        = Color3.fromRGB(255, 0, 0)
+        part.Transparency = 0.8
+        part.Material     = Enum.Material.SmoothPlastic
+        part.Anchored     = true
+        part.CanCollide   = true
+        local pathMod       = Instance.new("PathfindingModifier")
+        pathMod.Label       = "ClimbPlatform"
         pathMod.PassThrough = false
-        pathMod.Parent     = part
-        part.Parent        = folder
+        pathMod.Parent      = part
+        part.Parent         = folder
     end
 end)
 
@@ -365,9 +337,7 @@ end
 local function getPointsText()
     if cachedPointsLabel and cachedPointsLabel.Parent then
         local txt = cachedPointsLabel.Text
-        if not txt:find("%[") and not txt:find("%]") and txt ~= "" then
-            return txt
-        end
+        if not txt:find("%[") and not txt:find("%]") and txt ~= "" then return txt end
     end
     cachedPointsLabel = findPointsLabel()
     if cachedPointsLabel then return cachedPointsLabel.Text end
@@ -388,7 +358,6 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name           = "NexusEggFarm"
 screenGui.ResetOnSpawn   = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
 local okGui = pcall(function() screenGui.Parent = CoreGui end)
 if not okGui then screenGui.Parent = player:WaitForChild("PlayerGui") end
 
@@ -418,15 +387,15 @@ titleFix.Position         = UDim2.new(0, 0, 1, -12)
 titleFix.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 titleFix.BorderSizePixel  = 0
 
-local title = Instance.new("TextLabel", titleBar)
-title.Size               = UDim2.new(1, -35, 1, 0)
-title.Position           = UDim2.new(0, 10, 0, 0)
-title.BackgroundTransparency = 1
-title.Text               = "Nexus Egg Farm"
-title.TextColor3         = Color3.fromRGB(255, 255, 255)
-title.Font               = Enum.Font.GothamBold
-title.TextSize           = 13
-title.TextXAlignment     = Enum.TextXAlignment.Left
+local titleLbl = Instance.new("TextLabel", titleBar)
+titleLbl.Size                 = UDim2.new(1, -35, 1, 0)
+titleLbl.Position             = UDim2.new(0, 10, 0, 0)
+titleLbl.BackgroundTransparency = 1
+titleLbl.Text                 = "Nexus Egg Farm"
+titleLbl.TextColor3           = Color3.fromRGB(255, 255, 255)
+titleLbl.Font                 = Enum.Font.GothamBold
+titleLbl.TextSize             = 13
+titleLbl.TextXAlignment       = Enum.TextXAlignment.Left
 
 local minBtn = Instance.new("TextButton", titleBar)
 minBtn.Size             = UDim2.new(0, 24, 0, 24)
@@ -449,32 +418,32 @@ local statusLabel = Instance.new("TextLabel", content)
 statusLabel.Size                 = UDim2.new(1, 0, 0, 16)
 statusLabel.Position             = UDim2.new(0, 0, 0, 0)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text             = "● Idle"
-statusLabel.TextColor3       = Color3.fromRGB(140, 140, 140)
-statusLabel.Font             = Enum.Font.Gotham
-statusLabel.TextSize         = 11
-statusLabel.TextXAlignment   = Enum.TextXAlignment.Left
+statusLabel.Text                 = "● Idle"
+statusLabel.TextColor3           = Color3.fromRGB(140, 140, 140)
+statusLabel.Font                 = Enum.Font.Gotham
+statusLabel.TextSize             = 11
+statusLabel.TextXAlignment       = Enum.TextXAlignment.Left
 
 local countLabel = Instance.new("TextLabel", content)
 countLabel.Size                 = UDim2.new(1, 0, 0, 16)
 countLabel.Position             = UDim2.new(0, 0, 0, 18)
 countLabel.BackgroundTransparency = 1
-countLabel.Text             = "Collected: 0"
-countLabel.TextColor3       = Color3.fromRGB(180, 180, 180)
-countLabel.Font             = Enum.Font.Gotham
-countLabel.TextSize         = 11
-countLabel.TextXAlignment   = Enum.TextXAlignment.Left
+countLabel.Text                 = "Collected: 0"
+countLabel.TextColor3           = Color3.fromRGB(180, 180, 180)
+countLabel.Font                 = Enum.Font.Gotham
+countLabel.TextSize             = 11
+countLabel.TextXAlignment       = Enum.TextXAlignment.Left
 
 local lastLabel = Instance.new("TextLabel", content)
 lastLabel.Size                 = UDim2.new(1, 0, 0, 16)
 lastLabel.Position             = UDim2.new(0, 0, 0, 36)
 lastLabel.BackgroundTransparency = 1
-lastLabel.Text             = "Last: —"
-lastLabel.TextColor3       = Color3.fromRGB(130, 130, 130)
-lastLabel.Font             = Enum.Font.Gotham
-lastLabel.TextSize         = 10
-lastLabel.TextXAlignment   = Enum.TextXAlignment.Left
-lastLabel.TextTruncate     = Enum.TextTruncate.AtEnd
+lastLabel.Text                 = "Last: —"
+lastLabel.TextColor3           = Color3.fromRGB(130, 130, 130)
+lastLabel.Font                 = Enum.Font.Gotham
+lastLabel.TextSize             = 10
+lastLabel.TextXAlignment       = Enum.TextXAlignment.Left
+lastLabel.TextTruncate         = Enum.TextTruncate.AtEnd
 
 local actionBtn = Instance.new("TextButton", content)
 actionBtn.Size            = UDim2.new(1, 0, 0, 36)
@@ -506,10 +475,6 @@ actionBtn.MouseButton1Click:Connect(function()
     isFarming = not isFarming
     updateVisuals()
     if not isFarming then
-        local ap = rootPart:FindFirstChild("FlyPos")
-        local ao = rootPart:FindFirstChild("FlyOri")
-        if ap then ap.Enabled = false end
-        if ao then ao.Enabled = false end
         humanoid.PlatformStand = false
         humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
     end
@@ -536,57 +501,46 @@ end)
 
 -- ==== ПРИОРИТЕТЫ ЯИЦ ====
 local targetPriorities = {
-    ["andromeda_egg"]         = 100, ["angelic_egg"]            = 100,
-    ["blooming_egg"]          = 100, ["dreamer_egg"]            = 100,
-    ["egg_v2"]                = 100, ["forest_egg"]             = 100,
-    ["hatch_egg"]             = 100, ["royal_egg"]              = 100,
-    ["the_egg_of_the_sky"]    = 100, ["placeholder_egg"]        = 100,
-    ["random_potion_egg_2"]   = 52,  ["random_potion_egg_1"]    = 51,
-    ["point_egg_6"]           = 16,  ["point_egg_5"]            = 15,
-    ["point_egg_4"]           = 14,  ["point_egg_3"]            = 13,
-    ["point_egg_2"]           = 12,  ["point_egg_1"]            = 11
+    ["andromeda_egg"]       = 100, ["angelic_egg"]         = 100,
+    ["blooming_egg"]        = 100, ["dreamer_egg"]         = 100,
+    ["egg_v2"]              = 100, ["forest_egg"]          = 100,
+    ["hatch_egg"]           = 100, ["royal_egg"]           = 100,
+    ["the_egg_of_the_sky"]  = 100, ["placeholder_egg"]     = 100,
+    ["random_potion_egg_2"] = 52,  ["random_potion_egg_1"] = 51,
+    ["point_egg_6"]         = 16,  ["point_egg_5"]         = 15,
+    ["point_egg_4"]         = 14,  ["point_egg_3"]         = 13,
+    ["point_egg_2"]         = 12,  ["point_egg_1"]         = 11
 }
 
 local function sendFarmWebhook(eggName, isSuccess, pointsValue)
     task.spawn(function()
         local reqFunc = getRequestFunc()
         if not reqFunc or FARM_WEBHOOK_URL == "" then return end
-
         local ok, err = pcall(function()
-            local priority    = targetPriorities[eggName] or 0
+            local priority      = targetPriorities[eggName] or 0
             local isPriority100 = (priority == 100)
-            local prettyName  = eggName:gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end)
-            local rarityTag   = "Common"
-            local embedColor  = 8421504
-
-            if priority == 100 then
-                rarityTag = "LEGENDARY"; embedColor = 16766720
-            elseif priority >= 50 then
-                rarityTag = "Epic";      embedColor = 10494192
-            elseif priority >= 14 then
-                rarityTag = "Rare";      embedColor = 3447003
-            elseif priority >= 11 then
-                rarityTag = "Common";    embedColor = 8421504
+            local prettyName    = eggName:gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end)
+            local rarityTag     = "Common"
+            local embedColor    = 8421504
+            if priority == 100 then rarityTag = "LEGENDARY"; embedColor = 16766720
+            elseif priority >= 50 then rarityTag = "Epic"; embedColor = 10494192
+            elseif priority >= 14 then rarityTag = "Rare"; embedColor = 3447003
+            elseif priority >= 11 then rarityTag = "Common"; embedColor = 8421504
             end
-
             if not isSuccess then embedColor = 16711680 end
-
-            local pointsStr = pointsValue or "N/A"
             local fields = {
-                {["name"] = "Egg",            ["value"] = prettyName,                                  ["inline"] = true},
-                {["name"] = "Rarity",         ["value"] = rarityTag,                                   ["inline"] = true},
-                {["name"] = "Priority",       ["value"] = tostring(priority),                          ["inline"] = true},
-                {["name"] = "Total Collected",["value"] = tostring(totalCollected),                    ["inline"] = true},
-                {["name"] = "Points",         ["value"] = pointsStr,                                   ["inline"] = true},
-                {["name"] = "Player",         ["value"] = player.Name .. " (" .. player.DisplayName .. ")", ["inline"] = true}
+                {["name"] = "Egg",             ["value"] = prettyName,                                       ["inline"] = true},
+                {["name"] = "Rarity",          ["value"] = rarityTag,                                        ["inline"] = true},
+                {["name"] = "Priority",        ["value"] = tostring(priority),                               ["inline"] = true},
+                {["name"] = "Total Collected", ["value"] = tostring(totalCollected),                         ["inline"] = true},
+                {["name"] = "Points",          ["value"] = pointsValue or "N/A",                             ["inline"] = true},
+                {["name"] = "Player",          ["value"] = player.Name .. " (" .. player.DisplayName .. ")", ["inline"] = true}
             }
-
             local embedTitle
             if isPriority100 then embedTitle = "LEGENDARY EGG COLLECTED!"
             elseif isSuccess  then embedTitle = "Egg Collected"
             else                   embedTitle = "Collection Failed"
             end
-
             local body = {
                 ["embeds"] = {{
                     ["title"]       = embedTitle,
@@ -599,9 +553,7 @@ local function sendFarmWebhook(eggName, isSuccess, pointsValue)
                     ["timestamp"] = DateTime.now():ToIsoDate()
                 }}
             }
-
             if isPriority100 then body["content"] = "@everyone LEGENDARY EGG!" end
-
             reqFunc({
                 Url     = FARM_WEBHOOK_URL,
                 Method  = "POST",
@@ -609,17 +561,11 @@ local function sendFarmWebhook(eggName, isSuccess, pointsValue)
                 Body    = HttpService:JSONEncode(body)
             })
         end)
-
         if not ok then warn("[Webhook Error]: " .. tostring(err)) end
     end)
 end
 
--- ==== ЗОНЫ ====
-local blacklistZone1 = {
-    Size   = Vector3.new(150, 90, 150),
-    CFrame = CFrame.new(-28.1648, 128.4687, -123.9840)
-}
-
+-- ==== ISLAND ZONES ====
 local islandZones = {
     [4] = {
         Parent = nil,
@@ -642,52 +588,48 @@ local islandZones = {
 }
 
 local function checkZone(pos)
-    local lp1 = blacklistZone1.CFrame:PointToObjectSpace(pos)
-    if math.abs(lp1.X) <= (blacklistZone1.Size.X / 2)
-    and math.abs(lp1.Y) <= (blacklistZone1.Size.Y / 2)
-    and math.abs(lp1.Z) <= (blacklistZone1.Size.Z / 2) then
-        return "BLACKLIST"
-    end
     for id, data in pairs(islandZones) do
         local lp = data.CFrame:PointToObjectSpace(pos)
-        if math.abs(lp.X) <= data.Size.X/2
-        and math.abs(lp.Y) <= data.Size.Y/2
-        and math.abs(lp.Z) <= data.Size.Z/2 then
+        if math.abs(lp.X) <= data.Size.X / 2
+        and math.abs(lp.Y) <= data.Size.Y / 2
+        and math.abs(lp.Z) <= data.Size.Z / 2 then
             return id
         end
     end
     return nil
 end
 
+-- ==== RAYCAST PARAMS ====
 local rayParams = RaycastParams.new()
 rayParams.FilterType        = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
 rayParams.IgnoreWater       = true
-
-player.CharacterAdded:Connect(function(nc)
-    character, humanoid, rootPart = nc, nc:WaitForChild("Humanoid"), nc:WaitForChild("HumanoidRootPart")
-    rayParams.FilterDescendantsInstances = {character}
-end)
 rayParams.FilterDescendantsInstances = {character}
 
+player.CharacterAdded:Connect(function(nc)
+    character = nc
+    humanoid  = nc:WaitForChild("Humanoid")
+    rootPart  = nc:WaitForChild("HumanoidRootPart")
+    rayParams.FilterDescendantsInstances = {character}
+end)
+
+-- ==== DANGER ZONES ====
 local function setupDangerZones()
     local map = workspace:FindFirstChild("Map")
     if not map then return end
     local function applyModifier(part)
-        if part:IsA("BasePart") then
-            if not part:FindFirstChild("DangerMod") then
-                local mod        = Instance.new("PathfindingModifier")
-                mod.Name         = "DangerMod"
-                mod.Label        = "DangerZone"
-                mod.Parent       = part
-            end
+        if part:IsA("BasePart") and not part:FindFirstChild("DangerMod") then
+            local mod  = Instance.new("PathfindingModifier")
+            mod.Name   = "DangerMod"
+            mod.Label  = "DangerZone"
+            mod.Parent = part
         end
     end
     local miscs = map:FindFirstChild("Miscs")
     if miscs then
-        local waterBlocks = miscs:FindFirstChild("WaterBlocks")
-        if waterBlocks then
-            for _, block in ipairs(waterBlocks:GetChildren()) do
+        local wb = miscs:FindFirstChild("WaterBlocks")
+        if wb then
+            for _, block in ipairs(wb:GetChildren()) do
                 if block.Name == "WaterBlock" then applyModifier(block) end
             end
         end
@@ -712,21 +654,10 @@ end
 local function tryRegisterEgg(eggModel)
     if not eggModel or not eggModel.Parent then return false end
     if not targetPriorities[eggModel.Name] then return false end
-    if activeEggs[eggModel] or blacklist[eggModel] then return true end
-
-    local p = nil
-    if eggModel:IsA("BasePart") then
-        p = eggModel
-    else
-        p = eggModel:FindFirstChildWhichIsA("BasePart", true)
-    end
-
+    if activeEggs[eggModel] then return true end
+    local p = eggModel:IsA("BasePart") and eggModel or eggModel:FindFirstChildWhichIsA("BasePart", true)
     if p then
-        if checkZone(p.Position) == "BLACKLIST" then
-            blacklist[eggModel] = true
-        else
-            activeEggs[eggModel] = p
-        end
+        activeEggs[eggModel] = p
         pendingEggs[eggModel] = nil
         return true
     end
@@ -735,21 +666,15 @@ end
 
 local function scheduleEggWatch(eggModel)
     if not eggModel or not targetPriorities[eggModel.Name] then return end
-    if activeEggs[eggModel] or blacklist[eggModel] then return end
-    if pendingEggs[eggModel] then return end
-
+    if activeEggs[eggModel] or pendingEggs[eggModel] then return end
     pendingEggs[eggModel] = true
     task.spawn(function()
         for _, delay in ipairs({0.1, 0.3, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0}) do
             task.wait(delay)
-            if not eggModel or not eggModel.Parent then
-                pendingEggs[eggModel] = nil
-                return
-            end
+            if not eggModel or not eggModel.Parent then pendingEggs[eggModel] = nil; return end
             if tryRegisterEgg(eggModel) then return end
         end
-
-        if eggModel and eggModel.Parent and not activeEggs[eggModel] and not blacklist[eggModel] then
+        if eggModel and eggModel.Parent and not activeEggs[eggModel] then
             local conn
             conn = eggModel.DescendantAdded:Connect(function(desc)
                 if desc:IsA("BasePart") then
@@ -774,19 +699,16 @@ end
 
 local function checkAndAddEgg(obj)
     if not obj or not obj.Parent then return end
-
     if targetPriorities[obj.Name] then
         if not tryRegisterEgg(obj) then scheduleEggWatch(obj) end
     end
-
     if obj:IsA("BasePart") then
-        local eggAncestor = findEggAncestor(obj)
-        if eggAncestor then tryRegisterEgg(eggAncestor) end
+        local anc = findEggAncestor(obj)
+        if anc then tryRegisterEgg(anc) end
     end
-
     if obj:IsA("Model") or obj:IsA("Folder") then
-        local eggAncestor = findEggAncestor(obj)
-        if eggAncestor and eggAncestor ~= obj then tryRegisterEgg(eggAncestor) end
+        local anc = findEggAncestor(obj)
+        if anc and anc ~= obj then tryRegisterEgg(anc) end
     end
 end
 
@@ -808,14 +730,12 @@ end)
 
 workspace.DescendantRemoving:Connect(function(o)
     activeEggs[o]  = nil
-    blacklist[o]   = nil
     tempSkips[o]   = nil
     pendingEggs[o] = nil
-
-    local eggAncestor = findEggAncestor(o)
-    if eggAncestor then
-        local stillHasPart = eggAncestor:FindFirstChildWhichIsA("BasePart", true)
-        if not stillHasPart then activeEggs[eggAncestor] = nil end
+    local anc = findEggAncestor(o)
+    if anc then
+        local stillHasPart = anc:FindFirstChildWhichIsA("BasePart", true)
+        if not stillHasPart then activeEggs[anc] = nil end
     end
 end)
 
@@ -830,31 +750,26 @@ local function getBestEgg()
     local bestO, bestP, bestPr, minDist = nil, nil, -1, math.huge
     local rPos = rootPart.Position
     for o, p in pairs(activeEggs) do
-        if not blacklist[o] and not tempSkips[o] then
+        if not tempSkips[o] then
+            local validP = nil
             if p and p.Parent and p.Transparency < 1 then
-                local pr   = targetPriorities[o.Name] or 0
-                local pPos = p.Position
-                local d    = math.sqrt((rPos.X-pPos.X)^2 + (rPos.Y-pPos.Y)^2 + (rPos.Z-pPos.Z)^2)
-                if pr > bestPr or (pr == bestPr and d < minDist) then
-                    bestO, bestP, bestPr, minDist = o, p, pr, d
-                end
-            else
-                if o and o.Parent then
-                    local newP = o:FindFirstChildWhichIsA("BasePart", true)
-                    if newP and newP.Transparency < 1 then
-                        activeEggs[o] = newP
-                        p = newP
-                        local pr   = targetPriorities[o.Name] or 0
-                        local pPos = p.Position
-                        local d    = math.sqrt((rPos.X-pPos.X)^2 + (rPos.Y-pPos.Y)^2 + (rPos.Z-pPos.Z)^2)
-                        if pr > bestPr or (pr == bestPr and d < minDist) then
-                            bestO, bestP, bestPr, minDist = o, p, pr, d
-                        end
-                    else
-                        activeEggs[o] = nil
-                    end
+                validP = p
+            elseif o and o.Parent then
+                local newP = o:FindFirstChildWhichIsA("BasePart", true)
+                if newP and newP.Transparency < 1 then
+                    activeEggs[o] = newP
+                    validP = newP
                 else
                     activeEggs[o] = nil
+                end
+            else
+                activeEggs[o] = nil
+            end
+            if validP then
+                local pr = targetPriorities[o.Name] or 0
+                local d  = (rPos - validP.Position).Magnitude
+                if pr > bestPr or (pr == bestPr and d < minDist) then
+                    bestO, bestP, bestPr, minDist = o, validP, pr, d
                 end
             end
         end
@@ -862,15 +777,19 @@ local function getBestEgg()
     return bestO, bestP
 end
 
--- ==== FLY SYSTEM ====
+-- ==========================================
+-- FLY SYSTEM — оригинальный setupFly/flyTo
+-- ==========================================
 local function setupFly()
     local att = rootPart:FindFirstChild("FlyAtt") or Instance.new("Attachment", rootPart)
-    att.Name  = "FlyAtt"
-    local ap  = rootPart:FindFirstChild("FlyPos") or Instance.new("AlignPosition", rootPart)
-    ap.Name, ap.Mode, ap.Attachment0, ap.MaxForce, ap.Responsiveness = "FlyPos", Enum.PositionAlignmentMode.OneAttachment, att, 9999999, 80
+    att.Name = "FlyAtt"
+    local ap = rootPart:FindFirstChild("FlyPos") or Instance.new("AlignPosition", rootPart)
+    ap.Name, ap.Mode, ap.Attachment0, ap.MaxForce, ap.Responsiveness =
+        "FlyPos", Enum.PositionAlignmentMode.OneAttachment, att, 9999999, 80
     ap.Enabled = false
-    local ao  = rootPart:FindFirstChild("FlyOri") or Instance.new("AlignOrientation", rootPart)
-    ao.Name, ao.Mode, ao.Attachment0, ao.MaxTorque, ao.Responsiveness = "FlyOri", Enum.OrientationAlignmentMode.OneAttachment, att, 9999999, 80
+    local ao = rootPart:FindFirstChild("FlyOri") or Instance.new("AlignOrientation", rootPart)
+    ao.Name, ao.Mode, ao.Attachment0, ao.MaxTorque, ao.Responsiveness =
+        "FlyOri", Enum.OrientationAlignmentMode.OneAttachment, att, 9999999, 80
     ao.Enabled = false
     return ap, ao
 end
@@ -886,13 +805,12 @@ local function flyTo(targetPos, isJump, maxTime)
     local bY = targetPos.Y + hOff
     local reached, stuckT, lastP, startT = false, 0, rootPart.Position, tick()
     local stuckAttempts = 0
-
     local hover = RunService.Heartbeat:Connect(function()
         if not isFarming or humanoid.Health <= 0 then return end
         local cPos = rootPart.Position
         local tX, tZ = targetPos.X, targetPos.Z
         local dx, dz = tX - cPos.X, tZ - cPos.Z
-        local flatDist  = math.sqrt(dx*dx + dz*dz)
+        local flatDist   = math.sqrt(dx*dx + dz*dz)
         local heightDiff = bY - cPos.Y
         local mDir = Vector3.zero
         if flatDist > 0.3 then mDir = Vector3.new(dx, 0, dz).Unit end
@@ -920,8 +838,7 @@ local function flyTo(targetPos, isJump, maxTime)
             end
             if hasObstacleAhead then
                 if heightDiff < -10 then
-                    local side = rootPart.CFrame.RightVector * 5
-                    ap.Position = cPos + side + Vector3.new(0, -2, 0)
+                    ap.Position = cPos + rootPart.CFrame.RightVector * 5 + Vector3.new(0, -2, 0)
                 else
                     ap.Position = Vector3.new(cPos.X, cPos.Y + 6, cPos.Z)
                 end
@@ -932,25 +849,24 @@ local function flyTo(targetPos, isJump, maxTime)
         if hasObstacleAhead then ap.Position = Vector3.new(cPos.X, cPos.Y + 10, cPos.Z); return end
         ap.Position = Vector3.new(tX, bY, tZ)
     end)
-
     while not reached and isFarming and humanoid and humanoid.Health > 0 do
         if maxTime and (tick() - startT) >= maxTime then break end
         task.wait()
         ao.CFrame = CFrame.lookAt(rootPart.Position, Vector3.new(targetPos.X, rootPart.Position.Y, targetPos.Z))
         local cPos = rootPart.Position
-        local currentFlatDist = math.sqrt((cPos.X-targetPos.X)^2 + (cPos.Z-targetPos.Z)^2)
-        if currentFlatDist < 3 and math.abs(cPos.Y - bY) < 5 then reached = true; break end
-        local moved = math.sqrt((cPos.X-lastP.X)^2 + (cPos.Y-lastP.Y)^2 + (cPos.Z-lastP.Z)^2)
+        local flatD = math.sqrt((cPos.X-targetPos.X)^2 + (cPos.Z-targetPos.Z)^2)
+        if flatD < 3 and math.abs(cPos.Y - bY) < 5 then reached = true; break end
+        local moved = (cPos - lastP).Magnitude
         if moved < 0.12 then
             stuckT = stuckT + task.wait()
             if stuckT > 1.5 then
-                stuckAttempts = stuckAttempts + 1
+                stuckAttempts += 1
                 stuckT = 0
                 if stuckAttempts >= 4 then break end
                 local hDiff = bY - cPos.Y
                 if hDiff < -3 then
-                    local sideDir = rootPart.CFrame.RightVector * (stuckAttempts % 2 == 0 and 7 or -7)
-                    ap.Position = cPos + sideDir + Vector3.new(0, -4, 0)
+                    local sd = rootPart.CFrame.RightVector * (stuckAttempts % 2 == 0 and 7 or -7)
+                    ap.Position = cPos + sd + Vector3.new(0, -4, 0)
                 elseif hDiff > 3 then
                     ap.Position = cPos - rootPart.CFrame.LookVector * 5 + Vector3.new(0, 10, 0)
                 else
@@ -968,16 +884,252 @@ local function flyTo(targetPos, isJump, maxTime)
     return reached
 end
 
+-- ==========================================
+-- FLY DIRECT TO EGG
+-- Использует ТВОЙ fly (BodyVelocity + BodyGyro)
+-- точно как в оригинальном скрипте который ты дал
+-- ==========================================
+local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
+    maxTime = maxTime or 45
+
+    -- Твой оригинальный fly
+    local FLY_SPEED = 40
+    local STEP_TIME = 0.3
+
+    local bv = Instance.new("BodyVelocity")
+    bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+    bv.Velocity = Vector3.new(0, 0, 0)
+    bv.Parent   = rootPart
+
+    local bg = Instance.new("BodyGyro")
+    bg.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
+    bg.P         = 15000
+    bg.CFrame    = rootPart.CFrame
+    bg.Parent    = rootPart
+
+    humanoid.PlatformStand = true
+    rootPart.Anchored      = false
+
+    -- Настройки обхода препятствий
+    local CHECK_DIST   = 6
+    local SIDE_DIST    = 5
+    local RISE_AMOUNT  = 18
+    local SIDE_NUDGE   = 10
+    local RISE_TIMEOUT = 2.5
+    local SIDE_TIMEOUT = 2.0
+
+    -- Машина состояний
+    local state      = "direct"
+    local stateStart = tick()
+    local sideDir    = nil
+
+    local stuckTimer  = 0
+    local lastPos     = rootPart.Position
+    local reached     = false
+    local startT      = tick()
+    local moveTimer   = 0
+    local isMoving    = true
+
+    local function checkObs(origin, dir, dist)
+        return workspace:Raycast(origin, dir * dist, rayParams) ~= nil
+    end
+
+    local conn = RunService.Heartbeat:Connect(function(dt)
+        if not isFarming or humanoid.Health <= 0 then return end
+        if checkPart and (not checkPart.Parent or checkPart.Transparency >= 1) then return end
+
+        local cPos = rootPart.Position
+        local tPos = (checkPart and checkPart.Parent) and checkPart.Position or targetPos
+
+        local dx = tPos.X - cPos.X
+        local dy = tPos.Y - cPos.Y
+        local dz = tPos.Z - cPos.Z
+        local fullDist = math.sqrt(dx*dx + dy*dy + dz*dz)
+        local flatDist = math.sqrt(dx*dx + dz*dz)
+
+        -- Направление к цели в 3D (для полёта)
+        local toTarget3D = (fullDist > 0.1)
+            and Vector3.new(dx, dy, dz).Unit
+            or  Vector3.new(0, 0, 0)
+
+        -- Горизонтальное направление (для raycast)
+        local toTargetFlat = (flatDist > 0.1)
+            and Vector3.new(dx, 0, dz).Unit
+            or  Vector3.new(0, 0, 0)
+
+        -- Raycast проверки
+        local obsForward = false
+        local obsUp      = false
+        local obsRight   = false
+        local obsLeft    = false
+
+        if toTargetFlat.Magnitude > 0.1 then
+            obsForward = checkObs(cPos + Vector3.new(0, -2.5, 0), toTargetFlat, CHECK_DIST)
+                      or checkObs(cPos,                            toTargetFlat, CHECK_DIST)
+                      or checkObs(cPos + Vector3.new(0,  2.5, 0), toTargetFlat, CHECK_DIST)
+
+            obsUp = checkObs(cPos, Vector3.new(0, 1, 0), RISE_AMOUNT + 2)
+
+            local rightVec = Vector3.new(toTargetFlat.Z, 0, -toTargetFlat.X)
+            obsRight = checkObs(cPos,  rightVec, SIDE_DIST)
+            obsLeft  = checkObs(cPos, -rightVec, SIDE_DIST)
+        end
+
+        -- Выбор направления полёта по машине состояний
+        local elapsed  = tick() - stateStart
+        local flyDir   = Vector3.new(0, 0, 0)
+
+        if state == "direct" then
+            if obsForward then
+                if not obsUp then
+                    state = "rising"
+                elseif not obsRight then
+                    state   = "siding"
+                    sideDir = Vector3.new(toTargetFlat.Z, 0, -toTargetFlat.X)
+                elseif not obsLeft then
+                    state   = "siding"
+                    sideDir = Vector3.new(-toTargetFlat.Z, 0, toTargetFlat.X)
+                else
+                    state = "backing"
+                end
+                stateStart = tick()
+            else
+                -- Летим прямо к цели в 3D (вверх/вниз/вперёд)
+                flyDir = toTarget3D
+            end
+
+        elseif state == "rising" then
+            local clearAhead = not checkObs(cPos + Vector3.new(0, -2.5, 0), toTargetFlat, CHECK_DIST)
+                           and not checkObs(cPos,                            toTargetFlat, CHECK_DIST)
+                           and not checkObs(cPos + Vector3.new(0,  2.5, 0), toTargetFlat, CHECK_DIST)
+            if clearAhead or elapsed > RISE_TIMEOUT then
+                state = "direct"
+                stateStart = tick()
+                flyDir = toTarget3D
+            else
+                -- Летим строго вверх
+                flyDir = Vector3.new(0, 1, 0)
+            end
+
+        elseif state == "siding" then
+            local clearAhead = not checkObs(cPos + Vector3.new(0, -2.5, 0), toTargetFlat, CHECK_DIST)
+                           and not checkObs(cPos,                            toTargetFlat, CHECK_DIST)
+            if clearAhead or elapsed > SIDE_TIMEOUT then
+                state   = "direct"
+                sideDir = nil
+                stateStart = tick()
+                flyDir = toTarget3D
+            else
+                -- Летим вбок + немного вперёд + чуть вверх
+                local md = sideDir + toTargetFlat * 0.4
+                md = Vector3.new(md.X, 0, md.Z)
+                if md.Magnitude > 0 then md = md.Unit end
+                flyDir = (md + Vector3.new(0, 0.2, 0)).Unit
+            end
+
+        elseif state == "backing" then
+            if elapsed > 1.5 then
+                state = "direct"
+                stateStart = tick()
+                flyDir = toTarget3D
+            else
+                flyDir = (-toTargetFlat + Vector3.new(0, 0.5, 0)).Unit
+            end
+        end
+
+        -- Применяем ТВОЙ оригинальный fly (рывок/заморозка)
+        moveTimer = moveTimer + dt
+        if isMoving then
+            rootPart.Anchored = false
+            if flyDir.Magnitude > 0.01 then
+                bv.Velocity = flyDir * FLY_SPEED
+            else
+                bv.Velocity = Vector3.new(0, 0, 0)
+            end
+            -- Поворачиваем к цели
+            if toTargetFlat.Magnitude > 0.1 then
+                bg.CFrame = CFrame.lookAt(cPos, cPos + toTargetFlat)
+            end
+            if moveTimer >= STEP_TIME then
+                moveTimer = 0
+                isMoving  = false
+                bv.Velocity = Vector3.new(0, 0, 0)
+            end
+        else
+            -- Фаза заморозки
+            rootPart.Anchored = true
+            rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            if moveTimer >= STEP_TIME then
+                moveTimer = 0
+                isMoving  = true
+                rootPart.Anchored = false
+            end
+        end
+    end)
+
+    -- Основной цикл ожидания
+    while isFarming and humanoid and humanoid.Health > 0 do
+        if tick() - startT >= maxTime then break end
+        if checkPart and (not checkPart.Parent or checkPart.Transparency >= 1) then break end
+
+        task.wait()
+
+        local cPos = rootPart.Position
+        local tPos = (checkPart and checkPart.Parent) and checkPart.Position or targetPos
+
+        -- Проверка застревания
+        local moved = (cPos - lastPos).Magnitude
+        if moved < 0.05 then
+            stuckTimer = stuckTimer + 1
+            if stuckTimer > 80 then
+                stuckTimer = 0
+                state      = "backing"
+                stateStart = tick()
+            end
+        else
+            stuckTimer = 0
+        end
+        lastPos = cPos
+
+        local flatDist = math.sqrt((cPos.X-tPos.X)^2 + (cPos.Z-tPos.Z)^2)
+        local vertDist = math.abs(cPos.Y - tPos.Y)
+        if flatDist < 5 and vertDist < 8 then
+            reached = true
+            break
+        end
+    end
+
+    conn:Disconnect()
+
+    -- Чистим физику
+    if bv and bv.Parent then bv:Destroy() end
+    if bg and bg.Parent then bg:Destroy() end
+    rootPart.Anchored      = false
+    humanoid.PlatformStand = false
+    humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+
+    return reached
+end
+
+-- ==========================================
+-- PATHFINDING
+-- ==========================================
 local function getChainTo(targetId)
     local chain = {}
     local curr  = targetId
-    while curr do table.insert(chain, 1, curr); curr = islandZones[curr].Parent end
+    while curr do
+        table.insert(chain, 1, curr)
+        curr = islandZones[curr].Parent
+    end
     return chain
 end
 
 local function smartPath(targetPos, checkPart, huntStart)
     local path = PathfindingService:CreatePath({
-        AgentRadius = 3, AgentHeight = 5, AgentCanJump = true, WaypointSpacing = 3,
+        AgentRadius     = 3,
+        AgentHeight     = 5,
+        AgentCanJump    = true,
+        WaypointSpacing = 3,
         Costs = {Water = math.huge, DangerZone = math.huge, ClimbPlatform = 0.1}
     })
     local success, _ = pcall(function() path:ComputeAsync(rootPart.Position, targetPos) end)
@@ -987,11 +1139,8 @@ local function smartPath(targetPos, checkPart, huntStart)
         if not isFarming or humanoid.Health <= 0 then return "Failed" end
         if huntStart and tick() - huntStart > 60 then return "Timeout" end
         if checkPart and (not checkPart.Parent or checkPart.Transparency == 1) then return "Failed" end
-
         local cPos = rootPart.Position
-        if math.sqrt((cPos.X-targetPos.X)^2 + (cPos.Y-targetPos.Y)^2 + (cPos.Z-targetPos.Z)^2) < 8 then
-            return "Reached"
-        end
+        if (cPos - targetPos).Magnitude < 8 then return "Reached" end
         if not flyTo(wps[i].Position, wps[i].Action == Enum.PathWaypointAction.Jump, 4) then
             local cY = rootPart.Position.Y
             local tY = wps[i].Position.Y
@@ -1000,7 +1149,7 @@ local function smartPath(targetPos, checkPart, huntStart)
             elseif cY < tY - 5 then
                 flyTo(rootPart.Position - rootPart.CFrame.LookVector * 5 + Vector3.new(0, 8, 0), false, 1)
             else
-                flyTo(rootPart.Position + (-rootPart.CFrame.LookVector * 5), false, 0.5)
+                flyTo(rootPart.Position - rootPart.CFrame.LookVector * 5, false, 0.5)
             end
             return "Stuck"
         end
@@ -1008,53 +1157,20 @@ local function smartPath(targetPos, checkPart, huntStart)
     return "Reached"
 end
 
--- ============================================================
--- ВЗАИМОДЕЙСТВИЕ С ЯЙЦОМ — КЛИКАТЬ ПОКА Transparency < 1
--- ============================================================
-local function interactWithPrompt(obj)
-    local pr = nil
-    if obj:IsA("ProximityPrompt") then
-        pr = obj
-    else
-        pr = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-    end
-    if pr then
-        if fireproximityprompt then
-            fireproximityprompt(pr, 1)
-        else
-            local key = pr.KeyboardKeyCode == Enum.KeyCode.Unknown and Enum.KeyCode.E or pr.KeyboardKeyCode
-            VirtualInputManager:SendKeyEvent(true, key, false, game)
-            task.wait(pr.HoldDuration + 0.1)
-            VirtualInputManager:SendKeyEvent(false, key, false, game)
-        end
-        return true
-    end
-    return false
-end
-
--- Нажимаем на яйцо пока его прозрачность < 1 (или пока оно есть)
+-- ==========================================
+-- ВЗАИМОДЕЙСТВИЕ С ЯЙЦОМ
+-- ==========================================
 local function clickUntilGone(obj, p, maxWait)
     maxWait = maxWait or 10
     local startT = tick()
-
-    -- Ищем ProximityPrompt один раз
     local pr = nil
-    if obj then
-        pr = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-    end
-    if not pr and p then
-        pr = p:FindFirstChildWhichIsA("ProximityPrompt", true)
-    end
-
+    if obj then pr = obj:FindFirstChildWhichIsA("ProximityPrompt", true) end
+    if not pr and p then pr = p:FindFirstChildWhichIsA("ProximityPrompt", true) end
     while true do
-        -- Проверяем: яйцо исчезло (transparency == 1 или объект удалён)
-        local partGone = (not p or not p.Parent or p.Transparency >= 1)
-        local objGone  = (not obj or not obj.Parent)
-
+        local partGone = not p or not p.Parent or p.Transparency >= 1
+        local objGone  = not obj or not obj.Parent
         if partGone or objGone then break end
         if tick() - startT > maxWait then break end
-
-        -- Кликаем
         if pr and pr.Parent then
             if fireproximityprompt then
                 pcall(function() fireproximityprompt(pr, 1) end)
@@ -1068,38 +1184,38 @@ local function clickUntilGone(obj, p, maxWait)
                 end)
             end
         else
-            -- Пробуем снова найти prompt
-            if obj and obj.Parent then
-                pr = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-            end
-            if not pr and p and p.Parent then
-                pr = p:FindFirstChildWhichIsA("ProximityPrompt", true)
-            end
+            if obj and obj.Parent then pr = obj:FindFirstChildWhichIsA("ProximityPrompt", true) end
+            if not pr and p and p.Parent then pr = p:FindFirstChildWhichIsA("ProximityPrompt", true) end
         end
-
         task.wait(0.1)
     end
 end
 
--- ==== ГЛАВНЫЙ ОХОТНИК ====
+-- ==========================================
+-- ГЛАВНЫЙ ОХОТНИК
+-- ==========================================
 local function huntTarget(obj, p)
     if not p or not p.Parent then return end
-    local eggName    = tostring(obj.Name)
-    local huntStart  = tick()
-    local tarZone    = checkZone(p.Position)
+    local eggName     = tostring(obj.Name)
+    local huntStart   = tick()
+    local tarZone     = checkZone(p.Position)
     local isEarlyExit = false
-    local startZone  = checkZone(rootPart.Position)
+    local startZone   = checkZone(rootPart.Position)
 
     if typeof(tarZone) == "number" and startZone ~= tarZone then
         local chain = getChainTo(tarZone)
         for _, zoneId in ipairs(chain) do
             if not isEarlyExit and checkZone(rootPart.Position) ~= zoneId then
                 local data = islandZones[zoneId]
-                local cPos = rootPart.Position
                 local dPos = data.Path[1]
-                if math.sqrt((cPos.X-dPos.X)^2 + (cPos.Y-dPos.Y)^2 + (cPos.Z-dPos.Z)^2) > 15 then
+                if (rootPart.Position - dPos).Magnitude > 15 then
                     local res = smartPath(dPos, p, huntStart)
-                    if res == "Timeout" or res == "NoPath" then isEarlyExit = true end
+                    if res == "NoPath" or res == "NoPatch" then
+                        print("[Farm]: NoPatch к zone entry → FLY напрямую")
+                        flyDirectToEgg(dPos, nil, huntStart, 30)
+                    elseif res == "Timeout" then
+                        isEarlyExit = true
+                    end
                 end
                 if not isEarlyExit then
                     for i = 1, #data.Path do
@@ -1120,38 +1236,39 @@ local function huntTarget(obj, p)
 
             local cPos = rootPart.Position
             local pPos = p.Position
-            local dist = math.sqrt((cPos.X-pPos.X)^2 + (cPos.Y-pPos.Y)^2 + (cPos.Z-pPos.Z)^2)
+            local dist = (cPos - pPos).Magnitude
 
             if dist < 8 then
-                -- Приземляемся
                 humanoid.PlatformStand = false
                 humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
                 task.wait(0.1)
-
-                -- ★ КЛИКАЕМ ПО ЯЙЦУ ПОКА ОНО НЕ ИСЧЕЗНЕТ (Transparency < 1) ★
                 clickUntilGone(obj, p, 10)
-
-                -- Фиксируем сбор
                 totalCollected = totalCollected + 1
-                local pointsNow = getPointsText()
-                local prettyName = eggName:gsub("_", " "):gsub("(%a)([%w]*)", function(a, b)
-                    return a:upper() .. b
-                end)
-                lastLabel.Text  = "Last: " .. prettyName
-                countLabel.Text = "Collected: " .. totalCollected
+                local pointsNow  = getPointsText()
+                local prettyName = eggName:gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end)
+                lastLabel.Text   = "Last: " .. prettyName
+                countLabel.Text  = "Collected: " .. totalCollected
                 sendFarmWebhook(eggName, true, pointsNow)
                 tempSkips = {}
                 break
             end
 
             local status = smartPath(pPos, p, huntStart)
-            if status == "Timeout" or status == "NoPath" or status == "Failed" then
+
+            -- ★ NoPath → включаем твой fly напрямую к яйцу ★
+            if status == "NoPath" or status == "NoPatch" then
+                print("[Farm]: NoPatch → FLY напрямую к " .. eggName)
+                local flyReached = flyDirectToEgg(pPos, p, huntStart, 45)
+                if not flyReached then
+                    tempSkips[obj] = true
+                    break
+                end
+            elseif status == "Timeout" or status == "Failed" then
                 tempSkips[obj] = true; break
             end
         end
     end
 
-    -- Возврат из зоны
     local myZone = checkZone(rootPart.Position)
     while typeof(myZone) == "number" do
         local data = islandZones[myZone]
@@ -1161,15 +1278,22 @@ local function huntTarget(obj, p)
         end
         myZone = data.Parent
     end
+
     activeEggs[obj] = nil
 end
 
--- ==== ГЛАВНЫЙ ЦИКЛ ФАРМА ====
+-- ==========================================
+-- ГЛАВНЫЙ ЦИКЛ ФАРМА
+-- ==========================================
 task.spawn(function()
     while true do
         if isFarming and humanoid and humanoid.Health > 0 then
             local o, p = getBestEgg()
-            if o and p then huntTarget(o, p) else task.wait(0.5) end
+            if o and p then
+                huntTarget(o, p)
+            else
+                task.wait(0.5)
+            end
         else
             task.wait(0.5)
         end
@@ -1177,16 +1301,14 @@ task.spawn(function()
     end
 end)
 
--- ==== ГОРЯЧАЯ КЛАВИША P ====
+-- ==========================================
+-- ГОРЯЧАЯ КЛАВИША P
+-- ==========================================
 UserInputService.InputBegan:Connect(function(input, gpe)
     if not gpe and input.KeyCode == Enum.KeyCode.P then
         isFarming = not isFarming
         updateVisuals()
         if not isFarming then
-            local ap = rootPart:FindFirstChild("FlyPos")
-            local ao = rootPart:FindFirstChild("FlyOri")
-            if ap then ap.Enabled = false end
-            if ao then ao.Enabled = false end
             humanoid.PlatformStand = false
             humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
         end
