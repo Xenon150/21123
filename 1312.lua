@@ -388,14 +388,14 @@ titleFix.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 titleFix.BorderSizePixel  = 0
 
 local titleLbl = Instance.new("TextLabel", titleBar)
-titleLbl.Size                 = UDim2.new(1, -35, 1, 0)
-titleLbl.Position             = UDim2.new(0, 10, 0, 0)
+titleLbl.Size                   = UDim2.new(1, -35, 1, 0)
+titleLbl.Position               = UDim2.new(0, 10, 0, 0)
 titleLbl.BackgroundTransparency = 1
-titleLbl.Text                 = "Nexus Egg Farm"
-titleLbl.TextColor3           = Color3.fromRGB(255, 255, 255)
-titleLbl.Font                 = Enum.Font.GothamBold
-titleLbl.TextSize             = 13
-titleLbl.TextXAlignment       = Enum.TextXAlignment.Left
+titleLbl.Text                   = "Nexus Egg Farm"
+titleLbl.TextColor3             = Color3.fromRGB(255, 255, 255)
+titleLbl.Font                   = Enum.Font.GothamBold
+titleLbl.TextSize               = 13
+titleLbl.TextXAlignment         = Enum.TextXAlignment.Left
 
 local minBtn = Instance.new("TextButton", titleBar)
 minBtn.Size             = UDim2.new(0, 24, 0, 24)
@@ -409,41 +409,41 @@ minBtn.BorderSizePixel  = 0
 Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
 
 local content = Instance.new("Frame", mainFrame)
-content.Name                 = "Content"
-content.Size                 = UDim2.new(1, -16, 1, -40)
-content.Position             = UDim2.new(0, 8, 0, 36)
+content.Name                   = "Content"
+content.Size                   = UDim2.new(1, -16, 1, -40)
+content.Position               = UDim2.new(0, 8, 0, 36)
 content.BackgroundTransparency = 1
 
 local statusLabel = Instance.new("TextLabel", content)
-statusLabel.Size                 = UDim2.new(1, 0, 0, 16)
-statusLabel.Position             = UDim2.new(0, 0, 0, 0)
+statusLabel.Size                   = UDim2.new(1, 0, 0, 16)
+statusLabel.Position               = UDim2.new(0, 0, 0, 0)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text                 = "● Idle"
-statusLabel.TextColor3           = Color3.fromRGB(140, 140, 140)
-statusLabel.Font                 = Enum.Font.Gotham
-statusLabel.TextSize             = 11
-statusLabel.TextXAlignment       = Enum.TextXAlignment.Left
+statusLabel.Text                   = "● Idle"
+statusLabel.TextColor3             = Color3.fromRGB(140, 140, 140)
+statusLabel.Font                   = Enum.Font.Gotham
+statusLabel.TextSize               = 11
+statusLabel.TextXAlignment         = Enum.TextXAlignment.Left
 
 local countLabel = Instance.new("TextLabel", content)
-countLabel.Size                 = UDim2.new(1, 0, 0, 16)
-countLabel.Position             = UDim2.new(0, 0, 0, 18)
+countLabel.Size                   = UDim2.new(1, 0, 0, 16)
+countLabel.Position               = UDim2.new(0, 0, 0, 18)
 countLabel.BackgroundTransparency = 1
-countLabel.Text                 = "Collected: 0"
-countLabel.TextColor3           = Color3.fromRGB(180, 180, 180)
-countLabel.Font                 = Enum.Font.Gotham
-countLabel.TextSize             = 11
-countLabel.TextXAlignment       = Enum.TextXAlignment.Left
+countLabel.Text                   = "Collected: 0"
+countLabel.TextColor3             = Color3.fromRGB(180, 180, 180)
+countLabel.Font                   = Enum.Font.Gotham
+countLabel.TextSize               = 11
+countLabel.TextXAlignment         = Enum.TextXAlignment.Left
 
 local lastLabel = Instance.new("TextLabel", content)
-lastLabel.Size                 = UDim2.new(1, 0, 0, 16)
-lastLabel.Position             = UDim2.new(0, 0, 0, 36)
+lastLabel.Size                   = UDim2.new(1, 0, 0, 16)
+lastLabel.Position               = UDim2.new(0, 0, 0, 36)
 lastLabel.BackgroundTransparency = 1
-lastLabel.Text                 = "Last: —"
-lastLabel.TextColor3           = Color3.fromRGB(130, 130, 130)
-lastLabel.Font                 = Enum.Font.Gotham
-lastLabel.TextSize             = 10
-lastLabel.TextXAlignment       = Enum.TextXAlignment.Left
-lastLabel.TextTruncate         = Enum.TextTruncate.AtEnd
+lastLabel.Text                   = "Last: —"
+lastLabel.TextColor3             = Color3.fromRGB(130, 130, 130)
+lastLabel.Font                   = Enum.Font.Gotham
+lastLabel.TextSize               = 10
+lastLabel.TextXAlignment         = Enum.TextXAlignment.Left
+lastLabel.TextTruncate           = Enum.TextTruncate.AtEnd
 
 local actionBtn = Instance.new("TextButton", content)
 actionBtn.Size            = UDim2.new(1, 0, 0, 36)
@@ -641,7 +641,10 @@ local function setupDangerZones()
 end
 setupDangerZones()
 
--- ==== СИСТЕМА ОБНАРУЖЕНИЯ ЯИЦ ====
+-- ==========================================
+-- СИСТЕМА ОБНАРУЖЕНИЯ ЯИЦ
+-- Яйцо может быть как Model так и BasePart
+-- ==========================================
 local function findEggAncestor(obj)
     local current = obj
     while current and current ~= workspace do
@@ -655,12 +658,22 @@ local function tryRegisterEgg(eggModel)
     if not eggModel or not eggModel.Parent then return false end
     if not targetPriorities[eggModel.Name] then return false end
     if activeEggs[eggModel] then return true end
-    local p = eggModel:IsA("BasePart") and eggModel or eggModel:FindFirstChildWhichIsA("BasePart", true)
+
+    -- Яйцо само является BasePart
+    if eggModel:IsA("BasePart") then
+        activeEggs[eggModel] = eggModel
+        pendingEggs[eggModel] = nil
+        return true
+    end
+
+    -- Яйцо является Model/Folder — ищем BasePart внутри
+    local p = eggModel:FindFirstChildWhichIsA("BasePart", true)
     if p then
         activeEggs[eggModel] = p
         pendingEggs[eggModel] = nil
         return true
     end
+
     return false
 end
 
@@ -671,9 +684,13 @@ local function scheduleEggWatch(eggModel)
     task.spawn(function()
         for _, delay in ipairs({0.1, 0.3, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0}) do
             task.wait(delay)
-            if not eggModel or not eggModel.Parent then pendingEggs[eggModel] = nil; return end
+            if not eggModel or not eggModel.Parent then
+                pendingEggs[eggModel] = nil
+                return
+            end
             if tryRegisterEgg(eggModel) then return end
         end
+
         if eggModel and eggModel.Parent and not activeEggs[eggModel] then
             local conn
             conn = eggModel.DescendantAdded:Connect(function(desc)
@@ -699,16 +716,27 @@ end
 
 local function checkAndAddEgg(obj)
     if not obj or not obj.Parent then return end
+
+    -- Объект сам является яйцом (любого типа)
     if targetPriorities[obj.Name] then
-        if not tryRegisterEgg(obj) then scheduleEggWatch(obj) end
+        if not tryRegisterEgg(obj) then
+            scheduleEggWatch(obj)
+        end
+        return
     end
+
+    -- Объект является дочерним BasePart яйца-модели
     if obj:IsA("BasePart") then
         local anc = findEggAncestor(obj)
         if anc then tryRegisterEgg(anc) end
     end
+
+    -- Объект является контейнером внутри яйца
     if obj:IsA("Model") or obj:IsA("Folder") then
         local anc = findEggAncestor(obj)
-        if anc and anc ~= obj then tryRegisterEgg(anc) end
+        if anc and anc ~= obj then
+            tryRegisterEgg(anc)
+        end
     end
 end
 
@@ -735,7 +763,9 @@ workspace.DescendantRemoving:Connect(function(o)
     local anc = findEggAncestor(o)
     if anc then
         local stillHasPart = anc:FindFirstChildWhichIsA("BasePart", true)
-        if not stillHasPart then activeEggs[anc] = nil end
+        if not stillHasPart and not anc:IsA("BasePart") then
+            activeEggs[anc] = nil
+        end
     end
 end)
 
@@ -746,25 +776,40 @@ task.spawn(function()
     end
 end)
 
+-- ==== ВЫБОР ЛУЧШЕГО ЯЙЦА ====
 local function getBestEgg()
     local bestO, bestP, bestPr, minDist = nil, nil, -1, math.huge
     local rPos = rootPart.Position
+
     for o, p in pairs(activeEggs) do
         if not tempSkips[o] then
             local validP = nil
-            if p and p.Parent and p.Transparency < 1 then
-                validP = p
-            elseif o and o.Parent then
-                local newP = o:FindFirstChildWhichIsA("BasePart", true)
-                if newP and newP.Transparency < 1 then
-                    activeEggs[o] = newP
-                    validP = newP
+
+            -- Случай 1: яйцо само является BasePart
+            if o:IsA("BasePart") then
+                if o.Parent and o.Transparency < 1 then
+                    validP = o
+                    activeEggs[o] = o
                 else
                     activeEggs[o] = nil
                 end
+            -- Случай 2: яйцо является Model/Folder, p — его дочерний BasePart
             else
-                activeEggs[o] = nil
+                if p and p.Parent and p.Transparency < 1 then
+                    validP = p
+                elseif o and o.Parent then
+                    local newP = o:FindFirstChildWhichIsA("BasePart", true)
+                    if newP and newP.Transparency < 1 then
+                        activeEggs[o] = newP
+                        validP = newP
+                    else
+                        activeEggs[o] = nil
+                    end
+                else
+                    activeEggs[o] = nil
+                end
             end
+
             if validP then
                 local pr = targetPriorities[o.Name] or 0
                 local d  = (rPos - validP.Position).Magnitude
@@ -774,11 +819,12 @@ local function getBestEgg()
             end
         end
     end
+
     return bestO, bestP
 end
 
 -- ==========================================
--- FLY SYSTEM — оригинальный setupFly/flyTo
+-- FLY SYSTEM
 -- ==========================================
 local function setupFly()
     local att = rootPart:FindFirstChild("FlyAtt") or Instance.new("Attachment", rootPart)
@@ -886,13 +932,10 @@ end
 
 -- ==========================================
 -- FLY DIRECT TO EGG
--- Использует ТВОЙ fly (BodyVelocity + BodyGyro)
--- точно как в оригинальном скрипте который ты дал
 -- ==========================================
 local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
     maxTime = maxTime or 45
 
-    -- Твой оригинальный fly
     local FLY_SPEED = 40
     local STEP_TIME = 0.3
 
@@ -910,28 +953,33 @@ local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
     humanoid.PlatformStand = true
     rootPart.Anchored      = false
 
-    -- Настройки обхода препятствий
     local CHECK_DIST   = 6
     local SIDE_DIST    = 5
     local RISE_AMOUNT  = 18
-    local SIDE_NUDGE   = 10
     local RISE_TIMEOUT = 2.5
     local SIDE_TIMEOUT = 2.0
 
-    -- Машина состояний
     local state      = "direct"
     local stateStart = tick()
     local sideDir    = nil
 
-    local stuckTimer  = 0
-    local lastPos     = rootPart.Position
-    local reached     = false
-    local startT      = tick()
-    local moveTimer   = 0
-    local isMoving    = true
+    local stuckTimer = 0
+    local lastPos    = rootPart.Position
+    local reached    = false
+    local startT     = tick()
+    local moveTimer  = 0
+    local isMoving   = true
 
     local function checkObs(origin, dir, dist)
         return workspace:Raycast(origin, dir * dist, rayParams) ~= nil
+    end
+
+    -- Получаем позицию цели (учитываем что checkPart может быть == obj если яйцо это Part)
+    local function getTargetPos()
+        if checkPart and checkPart.Parent then
+            return checkPart.Position
+        end
+        return targetPos
     end
 
     local conn = RunService.Heartbeat:Connect(function(dt)
@@ -939,7 +987,7 @@ local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
         if checkPart and (not checkPart.Parent or checkPart.Transparency >= 1) then return end
 
         local cPos = rootPart.Position
-        local tPos = (checkPart and checkPart.Parent) and checkPart.Position or targetPos
+        local tPos = getTargetPos()
 
         local dx = tPos.X - cPos.X
         local dy = tPos.Y - cPos.Y
@@ -947,17 +995,14 @@ local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
         local fullDist = math.sqrt(dx*dx + dy*dy + dz*dz)
         local flatDist = math.sqrt(dx*dx + dz*dz)
 
-        -- Направление к цели в 3D (для полёта)
         local toTarget3D = (fullDist > 0.1)
             and Vector3.new(dx, dy, dz).Unit
             or  Vector3.new(0, 0, 0)
 
-        -- Горизонтальное направление (для raycast)
         local toTargetFlat = (flatDist > 0.1)
             and Vector3.new(dx, 0, dz).Unit
             or  Vector3.new(0, 0, 0)
 
-        -- Raycast проверки
         local obsForward = false
         local obsUp      = false
         local obsRight   = false
@@ -967,17 +1012,14 @@ local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
             obsForward = checkObs(cPos + Vector3.new(0, -2.5, 0), toTargetFlat, CHECK_DIST)
                       or checkObs(cPos,                            toTargetFlat, CHECK_DIST)
                       or checkObs(cPos + Vector3.new(0,  2.5, 0), toTargetFlat, CHECK_DIST)
-
-            obsUp = checkObs(cPos, Vector3.new(0, 1, 0), RISE_AMOUNT + 2)
-
+            obsUp      = checkObs(cPos, Vector3.new(0, 1, 0), RISE_AMOUNT + 2)
             local rightVec = Vector3.new(toTargetFlat.Z, 0, -toTargetFlat.X)
             obsRight = checkObs(cPos,  rightVec, SIDE_DIST)
             obsLeft  = checkObs(cPos, -rightVec, SIDE_DIST)
         end
 
-        -- Выбор направления полёта по машине состояний
-        local elapsed  = tick() - stateStart
-        local flyDir   = Vector3.new(0, 0, 0)
+        local elapsed = tick() - stateStart
+        local flyDir  = Vector3.new(0, 0, 0)
 
         if state == "direct" then
             if obsForward then
@@ -994,7 +1036,6 @@ local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
                 end
                 stateStart = tick()
             else
-                -- Летим прямо к цели в 3D (вверх/вниз/вперёд)
                 flyDir = toTarget3D
             end
 
@@ -1007,7 +1048,6 @@ local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
                 stateStart = tick()
                 flyDir = toTarget3D
             else
-                -- Летим строго вверх
                 flyDir = Vector3.new(0, 1, 0)
             end
 
@@ -1020,7 +1060,6 @@ local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
                 stateStart = tick()
                 flyDir = toTarget3D
             else
-                -- Летим вбок + немного вперёд + чуть вверх
                 local md = sideDir + toTargetFlat * 0.4
                 md = Vector3.new(md.X, 0, md.Z)
                 if md.Magnitude > 0 then md = md.Unit end
@@ -1037,7 +1076,6 @@ local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
             end
         end
 
-        -- Применяем ТВОЙ оригинальный fly (рывок/заморозка)
         moveTimer = moveTimer + dt
         if isMoving then
             rootPart.Anchored = false
@@ -1046,7 +1084,6 @@ local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
             else
                 bv.Velocity = Vector3.new(0, 0, 0)
             end
-            -- Поворачиваем к цели
             if toTargetFlat.Magnitude > 0.1 then
                 bg.CFrame = CFrame.lookAt(cPos, cPos + toTargetFlat)
             end
@@ -1056,7 +1093,6 @@ local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
                 bv.Velocity = Vector3.new(0, 0, 0)
             end
         else
-            -- Фаза заморозки
             rootPart.Anchored = true
             rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
             if moveTimer >= STEP_TIME then
@@ -1067,7 +1103,6 @@ local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
         end
     end)
 
-    -- Основной цикл ожидания
     while isFarming and humanoid and humanoid.Health > 0 do
         if tick() - startT >= maxTime then break end
         if checkPart and (not checkPart.Parent or checkPart.Transparency >= 1) then break end
@@ -1075,9 +1110,8 @@ local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
         task.wait()
 
         local cPos = rootPart.Position
-        local tPos = (checkPart and checkPart.Parent) and checkPart.Position or targetPos
+        local tPos = getTargetPos()
 
-        -- Проверка застревания
         local moved = (cPos - lastPos).Magnitude
         if moved < 0.05 then
             stuckTimer = stuckTimer + 1
@@ -1100,8 +1134,6 @@ local function flyDirectToEgg(targetPos, checkPart, huntStart, maxTime)
     end
 
     conn:Disconnect()
-
-    -- Чистим физику
     if bv and bv.Parent then bv:Destroy() end
     if bg and bg.Parent then bg:Destroy() end
     rootPart.Anchored      = false
@@ -1160,16 +1192,40 @@ end
 -- ==========================================
 -- ВЗАИМОДЕЙСТВИЕ С ЯЙЦОМ
 -- ==========================================
+local function getEggPosition(obj, p)
+    -- Если яйцо само является Part — используем его позицию напрямую
+    if obj:IsA("BasePart") then
+        return obj.Parent and obj.Position or nil
+    end
+    -- Иначе используем найденный BasePart
+    if p and p.Parent then
+        return p.Position
+    end
+    -- Последняя попытка
+    local bp = obj:FindFirstChildWhichIsA("BasePart", true)
+    return bp and bp.Position or nil
+end
+
+local function isEggGone(obj, p)
+    -- Если яйцо само является Part
+    if obj:IsA("BasePart") then
+        return not obj.Parent or obj.Transparency >= 1
+    end
+    -- Если яйцо Model/Folder
+    return not obj.Parent
+        or not p
+        or not p.Parent
+        or p.Transparency >= 1
+end
+
 local function clickUntilGone(obj, p, maxWait)
     maxWait = maxWait or 10
     local startT = tick()
     local pr = nil
     if obj then pr = obj:FindFirstChildWhichIsA("ProximityPrompt", true) end
-    if not pr and p then pr = p:FindFirstChildWhichIsA("ProximityPrompt", true) end
+    if not pr and p and p ~= obj then pr = p:FindFirstChildWhichIsA("ProximityPrompt", true) end
     while true do
-        local partGone = not p or not p.Parent or p.Transparency >= 1
-        local objGone  = not obj or not obj.Parent
-        if partGone or objGone then break end
+        if isEggGone(obj, p) then break end
         if tick() - startT > maxWait then break end
         if pr and pr.Parent then
             if fireproximityprompt then
@@ -1184,8 +1240,12 @@ local function clickUntilGone(obj, p, maxWait)
                 end)
             end
         else
-            if obj and obj.Parent then pr = obj:FindFirstChildWhichIsA("ProximityPrompt", true) end
-            if not pr and p and p.Parent then pr = p:FindFirstChildWhichIsA("ProximityPrompt", true) end
+            if obj and obj.Parent then
+                pr = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+            end
+            if not pr and p and p.Parent and p ~= obj then
+                pr = p:FindFirstChildWhichIsA("ProximityPrompt", true)
+            end
         end
         task.wait(0.1)
     end
@@ -1195,10 +1255,14 @@ end
 -- ГЛАВНЫЙ ОХОТНИК
 -- ==========================================
 local function huntTarget(obj, p)
-    if not p or not p.Parent then return end
+    if isEggGone(obj, p) then return end
+
     local eggName     = tostring(obj.Name)
     local huntStart   = tick()
-    local tarZone     = checkZone(p.Position)
+    local eggPos      = getEggPosition(obj, p)
+    if not eggPos then return end
+
+    local tarZone     = checkZone(eggPos)
     local isEarlyExit = false
     local startZone   = checkZone(rootPart.Position)
 
@@ -1210,8 +1274,8 @@ local function huntTarget(obj, p)
                 local dPos = data.Path[1]
                 if (rootPart.Position - dPos).Magnitude > 15 then
                     local res = smartPath(dPos, p, huntStart)
-                    if res == "NoPath" or res == "NoPatch" then
-                        print("[Farm]: NoPatch к zone entry → FLY напрямую")
+                    if res == "NoPath" then
+                        print("[Farm]: NoPath к zone entry → FLY напрямую")
                         flyDirectToEgg(dPos, nil, huntStart, 30)
                     elseif res == "Timeout" then
                         isEarlyExit = true
@@ -1230,35 +1294,41 @@ local function huntTarget(obj, p)
     end
 
     if not isEarlyExit then
-        while p and p.Parent and p.Transparency < 1 do
+        while not isEggGone(obj, p) do
             if not isFarming or humanoid.Health <= 0 then break end
             if tick() - huntStart > 60 then tempSkips[obj] = true; break end
 
+            -- Обновляем позицию яйца (она может меняться)
+            eggPos = getEggPosition(obj, p)
+            if not eggPos then break end
+
             local cPos = rootPart.Position
-            local pPos = p.Position
-            local dist = (cPos - pPos).Magnitude
+            local dist = (cPos - eggPos).Magnitude
 
             if dist < 8 then
                 humanoid.PlatformStand = false
                 humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
                 task.wait(0.1)
                 clickUntilGone(obj, p, 10)
-                totalCollected = totalCollected + 1
-                local pointsNow  = getPointsText()
-                local prettyName = eggName:gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end)
-                lastLabel.Text   = "Last: " .. prettyName
-                countLabel.Text  = "Collected: " .. totalCollected
-                sendFarmWebhook(eggName, true, pointsNow)
-                tempSkips = {}
+
+                -- Проверяем что яйцо исчезло (собрали)
+                if isEggGone(obj, p) then
+                    totalCollected = totalCollected + 1
+                    local pointsNow  = getPointsText()
+                    local prettyName = eggName:gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end)
+                    lastLabel.Text   = "Last: " .. prettyName
+                    countLabel.Text  = "Collected: " .. totalCollected
+                    sendFarmWebhook(eggName, true, pointsNow)
+                    tempSkips = {}
+                end
                 break
             end
 
-            local status = smartPath(pPos, p, huntStart)
+            local status = smartPath(eggPos, p, huntStart)
 
-            -- ★ NoPath → включаем твой fly напрямую к яйцу ★
-            if status == "NoPath" or status == "NoPatch" then
-                print("[Farm]: NoPatch → FLY напрямую к " .. eggName)
-                local flyReached = flyDirectToEgg(pPos, p, huntStart, 45)
+            if status == "NoPath" then
+                print("[Farm]: NoPath → FLY напрямую к " .. eggName)
+                local flyReached = flyDirectToEgg(eggPos, p, huntStart, 45)
                 if not flyReached then
                     tempSkips[obj] = true
                     break
@@ -1269,6 +1339,7 @@ local function huntTarget(obj, p)
         end
     end
 
+    -- Возврат с острова
     local myZone = checkZone(rootPart.Position)
     while typeof(myZone) == "number" do
         local data = islandZones[myZone]
