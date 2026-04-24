@@ -507,9 +507,9 @@ local targetPriorities = {
     ["hatch_egg"]           = 100, ["royal_egg"]           = 100,
     ["the_egg_of_the_sky"]  = 100, ["placeholder_egg"]     = 100,
     ["random_potion_egg_2"] = 52,  ["random_potion_egg_1"] = 51,
-    ["point_egg_6"]         = 16,  ["point_egg_5"]         = 15,
-    ["point_egg_4"]         = 14,  ["point_egg_3"]         = 13,
-    ["point_egg_2"]         = 12,  ["point_egg_1"]         = 11
+    ["point_egg_"]         = 16,  ["point_egg_"]         = 15,
+    ["point_egg_"]         = 14,  ["point_egg_"]         = 13,
+    ["point_egg_"]         = 12,  ["point_egg_"]         = 11
 }
 
 local function sendFarmWebhook(eggName, isSuccess, pointsValue)
